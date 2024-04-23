@@ -1,6 +1,6 @@
-target_bed: {bed file of target region}
-meth_tsv: {path to methylation tsv}
-rm_out: {path to repeat masker output}
+target_bed: test3.bed
+meth_tsv: /net/eichler/vol27/projects/trisomy/nobackups/AG16777_and_family/methylation_runs_winnowmap/results/NG16777_ONT_to_asm/cpg/NG16777_ONT_to_asm_ont_unphased.bed
 window_size: 5000
-sample: {sample_name}
-len_filter: 50000
+slide: 5000
+sample: test4
+fasta: /net/eichler/vol27/projects/trisomy/nobackups/AG16777_and_family/16777_verkko_assembly.fasta
