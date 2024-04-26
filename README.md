@@ -18,3 +18,6 @@ Based on the median methylation frequency across the region, identifies and bins
 ```
 results/{sample}_CDR.bed
 ```
+
+# Requirements
+This pipeline requires snakemake, singularity, and the python packages pandas and numpy.

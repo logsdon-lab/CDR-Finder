@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-from Bio import SeqIO
 
 SNAKEMAKE_DIR = os.path.dirname(workflow.snakefile)
 
@@ -39,6 +38,10 @@ rule all:
         expand("results/{sample}_CDR.bed", sample=manifest_df.index),
 
 
+###
+# Subset fasta: Extracts subsequence from target bed
+###
+
 rule subset_fasta:
     input:
         fasta=find_fasta,
@@ -49,10 +52,16 @@ rule subset_fasta:
         mem=8,
         hrs=1,
     threads: 1
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
         bedtools getfasta -fi {input.fasta} -bed {input.bed} > {output.rm_fasta}
         """
+
+###
+# Subset meth: Intersects target bed with methylation bed
+###
 
 
 rule subset_meth:
@@ -65,11 +74,16 @@ rule subset_meth:
         mem=8,
         hrs=12,
     threads: 1
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
-        module load bedtools/2.29.2
         bedtools intersect -a {input.methylation_tsv} -b {input.target_bed} -wa > {output.subset_bed}
         """
+
+###
+# run_rm: Runs repeatmasker on the extracted subsequence fasta from rule subset_fasta
+###
 
 
 rule run_rm:
@@ -80,15 +94,17 @@ rule run_rm:
     resources:
         mem=8,
         hrs=12,
-    params:
-        directory="results/rm/",
     threads: 12
+    singularity:
+        "docker://eichlerlab/assembly_eval:0.1"
     shell:
         """
-        module load RepeatMasker/4.1.0
-        RepeatMasker -species human -dir {params.directory} -qq -pa {threads} {input.fasta}
+        RepeatMasker -species human -dir $( dirname {output.rm_out} ) -qq -pa {threads} {input.fasta}
         """
 
+###
+# Calculates mean frequency in windows/bins of the methylation tsv over the target region
+###
 
 rule calc_windows:
     input:
@@ -178,19 +194,12 @@ rule calc_windows:
                 pos2 = str(keep_window.at[idx_2, "Bin"]).split("-")[1]
                 freq = str(keep_window.at[idx_2, "Freq"])
                 chrom = str(keep_window.at[idx_2, "Chr"])
-                outfile.write(
-                    chrom
-        + "\t"
-                    + pos1
-                    + "\t"
-                    + pos2
-                    + "\t"
-                    + str(freq)
-                    + "\t"
-                    + str(idx_2)
-                    + "\n"
-                )
+                outfile.write("\t".join([chrom, pos1, pos2, freq, f"{idx_2}\n"]))
 
+
+###
+# Format RM: Converts Repeatmasker output to bedfile and extracts only ALR annotations
+###
 
 rule format_RM:
     input:
@@ -205,6 +214,10 @@ rule format_RM:
         """
         awk -v OFS="\\t" '{{print $5, $6, $7, $10, $9}}' {input.repeat_masker} | grep "ALR" > {output.repeat_bed}
         """
+
+###
+# Filter RM: Returns Repeatmasker bed contig name to original fasta name
+###
 
 
 rule filter_RM:
@@ -226,6 +239,11 @@ rule filter_RM:
         RM_df["chr"] = RM_df["chr"].str.split(pat=":").str[0]
         RM_df.to_csv(output.rm_bed, header=None, index=None, sep="\t")
 
+###
+# Intersect RM: Merges repeatmasker bed file with 500bp slop, and only keeps those above the ALR Threshold
+#               Intersects merged ALR bed file with binned methylation frequency bedfile 
+###
+
 
 rule intersect_RM:
     input:
@@ -240,12 +258,20 @@ rule intersect_RM:
     params:
         alr_threshold=ALR_THRESHOLD
     threads: 1
+    singularity:
+        "docker://eichlerlab/binf-basics:0.1"
     shell:
         """
-        module load bedtools/2.29.2
         bedtools merge -i {input.repeat_masker} -d 500 | awk '{{if ($3-$2 > {params.alr_threshold}) print}}' > {output.merged}
         bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed}
         """
+
+###
+# in threshold: Evaluates bed file from intersected bed file and surrounding regions for signatures of CDR
+# Initial signature is mean methylation frequency below dynamically calculated threshold 
+# Confidence is evaluated based on whether or not these low methylation frequency windows clear a size threshold 
+# + have flanking peaks of high methylation 
+###
 
 
 rule in_threshold:
@@ -260,6 +286,7 @@ rule in_threshold:
         hrs=1,
     threads: 1
     run:
+        # read in intersection bin bed
         intersect_bed = pd.read_csv(
             input.intersect_bed,
             header=None,
@@ -267,8 +294,8 @@ rule in_threshold:
             names=["chrom", "start", "stop", "freq", "idx"],
             index_col="idx",
         )
-
         with open(input.target_bed) as infile, open(output.final_call, "w+") as outfile:
+            # Evaluate over all windows in target bed        
             for line in infile:
                 # Empty dataframe for windows
                 window_avg_all = pd.DataFrame(columns=["Bin", "Freq"])
@@ -300,12 +327,13 @@ rule in_threshold:
                 max_freq = max(window_avg_all["Freq"])
                 mean_freq = np.mean(window_avg_all["Freq"])
                 max_thresh = max_freq - 1 * stddev_freq
-                # Subset df to those windows under the threshold
+                # Subset df to those windows under the threshold for instances where mean represents high methylation (large centromeres)
                 if mean_freq > LOW_THRESHOLD:
                     threshold = mean_freq - 1 * stddev_freq
                     window_avg_under = window_avg_all.loc[
                         window_avg_all["Freq"] <= threshold
                     ].copy()
+                # If methylation mean is low (small centromeres with more windows in CDR than not)
                 else:
                     threshold = mean_freq + 1 * (stddev_freq/2)
                     window_avg_under = window_avg_all.loc[
@@ -365,14 +393,20 @@ rule in_threshold:
                 for y in groups:
                     pos1 = int(check_df.at[y[0], "Bin"].split("-")[0])
                     pos2 = int(check_df.at[y[1], "Bin"].split("-")[1])
+                    # left_check and right_check are checking for flanking peaks of high methylation frequency
                     left_check = window_avg_all.loc[(window_avg_all['end'] < pos1 ) & (window_avg_all['end'] >= pos1-EDGE_SEARCH )].copy()
                     right_check = window_avg_all.loc[(window_avg_all['end'] > pos2 ) & (window_avg_all['end'] <= pos2+EDGE_SEARCH )].copy()
+                    # If neighbors are found on either side label as high confidence
                     if np.max(right_check['Freq']) > max_thresh and np.max(left_check['Freq']) > max_thresh:
                         confidence = "high_confidence"
+                    # Else assign and label low confidence
                     else:
                         confidence = "low_confidence-neighbor_peaks"
+                    # Label region with size threshold confidence
                     if pos2 - pos1 < int(REPORT_THRESHOLD):
                         confidence += "+low_confidence-size"
+                    # Write to output bed file
                     outfile.write(f"{chrom}\t{pos1}\t{pos2}\t{confidence}\n")
-                    window_df_out = window_df_out.append(check_df.loc[y[0]:y[1]])
+                    # Add to combined DF
+                    window_df_out = pd.concat([window_df_out, check_df.loc[y[0]:y[1]]])
                 window_df_out.to_csv(output.windows_call, sep='\t', index=False)
