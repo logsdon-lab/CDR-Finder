@@ -6,19 +6,22 @@ Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 Adapted and distributed by @fkmastrorosa and @wharvey31
 
 This is done by:
-- Bin into 5 kbp windows
-- Intersect with ALR annotations from RepeatMasker
-- Only take bins that fall below the threshold (median frequency in the bins annotated as “ALR”)
+- Extracting the sequence of interest
+- Intersect the sequence with its methylation data
+- Bin the region of interest into 5 kbp windows and calculate their mean methylation percentage
+- Run RepeatMasker on the sequence of interest to identify regions containing Alpha-satellite (ALR/Alpha)
+- For each Alpha-satellite containing region, it identifies bins with a lower methylation percentage than the avearge of the region
 - Merge consecutive bins
-- Filter for bins greater than 50 kbp
+- Checks if flanking bins greater than maximum methylation percentage (defined as within 1 standard deviation from the maximum)
+- Checks if the CDR calls are smaller than a user-specified threshold
 
 # Input
+- fasta: sample genome assembly
 - target_bed: BED file of target region coordinates
-- meth_tsv: Nanopolish methylation frequency TSV
-- rm_out: RepeatMasker .out file
+- meth_tsv: modbam2bed methylation frequency TSV
 
 # Output
-Based on the median methylation frequency across the region, identifies and bins regions with methylation frequency below median spanning >50 kbp.
+Based on the mean methylation frequency across the region, identifies and bins regions with methylation frequency below median spanning >25 kbp.
 ```
 results/{sample}_CDR.bed
 ```
