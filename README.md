@@ -12,7 +12,7 @@ This is done by:
 - Run RepeatMasker on the sequence of interest to identify regions containing Alpha-satellite (ALR/Alpha)
 - For each Alpha-satellite containing region, it identifies bins with a lower methylation percentage than the avearge of the region
 - Merge consecutive bins
-- Checks if flanking bins greater than maximum methylation percentage (defined as within 1 standard deviation from the maximum)
+- Checks if flanking bins with greater than maximum methylation percentage (defined as within 1 standard deviation from the maximum)
 - Checks if the CDR calls are smaller than a user-specified threshold
 
 # Input
