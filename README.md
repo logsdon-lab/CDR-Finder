@@ -1,5 +1,5 @@
 # CDR-Finder
-This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Gershman et al., Science, 2022).
+This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
 
 Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 
@@ -21,7 +21,7 @@ This is done by:
 - meth_tsv: modbam2bed methylation frequency TSV
 
 # Output
-Based on the mean methylation frequency across the region, identifies and bins regions with methylation frequency below median spanning >25 kbp.
+Based on the mean methylation frequency across the region, identifies and bins regions with methylation frequency below mean spanning >25 kbp.
 ```
 results/{sample}_CDR.bed
 ```
