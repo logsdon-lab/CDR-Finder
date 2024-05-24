@@ -307,16 +307,15 @@ rule in_threshold:
                     start_int = int(intersect_bed_sub.at[index, "start"]) + int(start)
                     stop_int = int(intersect_bed_sub.at[index, "stop"]) + int(start)
                     freq = intersect_bed_sub.at[index, "freq"]
-                    window_avg_all = window_avg_all.append(
-                        {
-                            "Bin": str(start_int) + "-" + str(stop_int),
-                            "pos": start_int,
-                            "end": stop_int,
-                            "Freq": float(freq),
-                            "idx_2": index,
-                        },
-                        ignore_index=True,
-                    )
+                    new_row2 = pd.DataFrame({
+                        "Bin": [str(start_int) + "-" + str(stop_int)],
+                        "pos": [start_int],
+                        "end": [stop_int],
+                        "Freq": [float(freq)],
+                        "idx_2": [index]
+                    })
+                    window_avg_all = pd.concat([window_avg_all, new_row2], ignore_index=True)
+
                 window_avg_all["idx_2"] = window_avg_all["idx_2"].astype(int)
                 window_avg_all = window_avg_all.set_index("idx_2")
                 # Establish threshold, stddev, max
