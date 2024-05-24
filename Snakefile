@@ -174,17 +174,15 @@ rule calc_windows:
                 if len(window_meth) == 0:
                     continue
                 avg_meth = window_meth["freq"].mean()
-                window_avg = window_avg.append(
-                    {
-                        "Chr": str(chrom),
-                        "Bin": str(RM_start) + "-" + str(RM_stop),
-                        "Freq": avg_meth,
-                    },
-                    ignore_index=True,
-                )
+                new_row = pd.DataFrame({
+                        "Chr": [str(chrom)],
+                        "Bin": [str(RM_start) + "-" + str(RM_stop)],
+                        "Freq": [avg_meth]
+                })
+                window_avg = pd.concat([window_avg, new_row], ignore_index=True)
 
             window_avg = window_avg.round({"Freq": 2})
-            keep_window = keep_window.append(window_avg)
+            keep_window = pd.concat([keep_window, window_avg])
 
         keep_window.reset_index(inplace=True)
 
