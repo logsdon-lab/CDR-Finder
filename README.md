@@ -18,7 +18,7 @@ This is done by:
 # Input
 - fasta: sample genome assembly
 - target_bed: BED file of target region coordinates
-- meth_tsv: modbam2bed methylation frequency TSV
+- meth_tsv: modbam2bed methylation BED
 
 # Output
 Based on the mean methylation frequency across the region, identifies and bins regions with methylation frequency below mean spanning >25 kbp.
