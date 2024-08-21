@@ -1,4 +1,2 @@
-test/bam/CHM13_CH8_ONT_methyl.bam filter=lfs diff=lfs merge=lfs -text
-test/fa/chr21_cen_500kbp.fa.gz filter=lfs diff=lfs merge=lfs -text
-test/fa/chr8_cen_500kbp.fa.gz filter=lfs diff=lfs merge=lfs -text
-test/bam/CHM13_CH21_ONT_methyl.bam filter=lfs diff=lfs merge=lfs -text
+test/bam/CHM13_chr8_chr21.bam filter=lfs diff=lfs merge=lfs -text
+test/fa/CHM13_chr8_chr21.fa.gz filter=lfs diff=lfs merge=lfs -text

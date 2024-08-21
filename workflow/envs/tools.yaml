@@ -1,0 +1,7 @@
+channels:
+  - bioconda
+  - epi2melabs
+dependencies:
+  - repeatmasker
+  - bedtools
+  - modbam2bed

@@ -1,8 +1,8 @@
 samples:
   CHM13:
-  	fasta: T2T-CHM13v2.fasta
-    regions: target_region.bed
-    bam: T2T-CHM13v2.bam
+  	fasta: test/fa/CHM13_chr8_chr21.fa.gz
+    regions: test/bed/CHM13_cen_500kbp.bed
+    bam: test/bam/CHM13_chr8_chr21.bam
 
 # Size of the methylation windows to average over
 window_size: 5000
