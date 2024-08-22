@@ -1,19 +1,30 @@
+import sys
 import argparse
 import pandas as pd
+import numpy as np
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("-i", "--intersect_bed", help="", type=str, required=True)
+    ap.add_argument("-t", "--target_bed", help="", type=str, required=True)
+    ap.add_argument("-o", "--final_call", help="", type=str)
+    ap.add_argument("-w", "--windows_call", help="", type=str)
+    ap.add_argument("--low_threshold", type=int, default=39)
+    ap.add_argument("--report_threshold", type=int, default=25000)
+    ap.add_argument("--edge_search", type=int, default=50000)
 
-    
+    args = ap.parse_args()
+
     # read in intersection bin bed
     intersect_bed = pd.read_csv(
-        input.intersect_bed,
+        args.intersect_bed,
         header=None,
         sep="\t",
         names=["chrom", "start", "stop", "freq", "idx"],
         index_col="idx",
     )
-    with open(input.target_bed) as infile, open(output.final_call, "w+") as outfile:
+    with open(args.target_bed) as infile, open(args.final_call, "w+") as outfile:
         # Evaluate over all windows in target bed        
         for line in infile:
             # Empty dataframe for windows
@@ -46,7 +57,7 @@ def main():
             mean_freq = np.mean(window_avg_all["Freq"])
             max_thresh = max_freq - 1 * stddev_freq
             # Subset df to those windows under the threshold for instances where mean represents high methylation (large centromeres)
-            if mean_freq > LOW_THRESHOLD:
+            if mean_freq > args.low_threshold:
                 threshold = mean_freq - 1 * stddev_freq
                 window_avg_under = window_avg_all.loc[
                     window_avg_all["Freq"] <= threshold
@@ -112,8 +123,8 @@ def main():
                 pos1 = int(check_df.at[y[0], "Bin"].split("-")[0])
                 pos2 = int(check_df.at[y[1], "Bin"].split("-")[1])
                 # left_check and right_check are checking for flanking peaks of high methylation frequency
-                left_check = window_avg_all.loc[(window_avg_all['end'] < pos1 ) & (window_avg_all['end'] >= pos1-EDGE_SEARCH )].copy()
-                right_check = window_avg_all.loc[(window_avg_all['end'] > pos2 ) & (window_avg_all['end'] <= pos2+EDGE_SEARCH )].copy()
+                left_check = window_avg_all.loc[(window_avg_all['end'] < pos1 ) & (window_avg_all['end'] >= pos1-args.edge_search )].copy()
+                right_check = window_avg_all.loc[(window_avg_all['end'] > pos2 ) & (window_avg_all['end'] <= pos2+args.edge_search )].copy()
                 # If neighbors are found on either side label as high confidence
                 if np.max(right_check['Freq']) > max_thresh and np.max(left_check['Freq']) > max_thresh:
                     confidence = "high_confidence"
@@ -121,13 +132,13 @@ def main():
                 else:
                     confidence = "low_confidence-neighbor_peaks"
                 # Label region with size threshold confidence
-                if pos2 - pos1 < int(REPORT_THRESHOLD):
+                if pos2 - pos1 < int(args.report_threshold):
                     confidence += "+low_confidence-size"
                 # Write to output bed file
                 outfile.write(f"{chrom}\t{pos1}\t{pos2}\t{confidence}\n")
                 # Add to combined DF
                 window_df_out = pd.concat([window_df_out, check_df.loc[y[0]:y[1]]])
-            window_df_out.to_csv(output.windows_call, sep='\t', index=False)
+            window_df_out.to_csv(args.windows_call, sep='\t', index=False)
 
 
 if __name__ == "__main__":

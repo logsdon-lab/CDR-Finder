@@ -280,13 +280,28 @@ rule in_threshold:
     output:
         final_call=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),
         windows_call=join(OUTPUT_DIR, "bed", "{sample}_windows_CDR.bed"),
+    log:
+        join(LOG_DIR, "in_threshold_{sample}.log"),
+    benchmark:
+        join(BMK_DIR, "in_threshold_{sample}.tsv")
     resources:
         mem=8,
         hrs=1,
+    params:
+        low_threshold=LOW_THRESHOLD,
+        report_threshold=REPORT_THRESHOLD,
+        edge_search=EDGE_SEARCH,
     conda:
         "envs/python.yaml"
     threads: 1
     shell:
         """
-        
+        python {input.script} \
+        --intersect_bed {input.intersect_bed} \
+        --target_bed {input.target_bed} \
+        --final_call {output.final_call} \
+        --windows_call {output.windows_call} \
+        --low_threshold {params.low_threshold} \
+        --report_threshold {params.report_threshold} \
+        --edge_search {params.edge_search} 2> {log}
         """
