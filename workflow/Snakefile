@@ -20,11 +20,6 @@ wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
 
 
-rule all:
-    input:
-        expand("results/{sample}_CDR.bed", sample=MANIFEST.keys()),
-
-
 ###
 # Subset fasta: Extracts subsequence from target bed
 ###
@@ -32,8 +27,8 @@ rule all:
 
 rule subset_fasta:
     input:
-        fasta=lambda wc: MANIFEST[wildcards.sample]["fasta"],
-        bed=lambda wc: MANIFEST[wildcards.sample]["regions"],
+        fasta=lambda wc: MANIFEST[wc.sample]["fasta"],
+        bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         rm_fasta=join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta"),
     log:
@@ -57,8 +52,8 @@ rule subset_fasta:
 
 rule get_methylation_bed:
     input:
-        ref=lambda wc: MANIFEST[wildcards.sample]["fasta"],
-        bam=lambda wc: MANIFEST[wildcards.sample]["bam"],
+        ref=lambda wc: MANIFEST[wc.sample]["fasta"],
+        bam=lambda wc: MANIFEST[wc.sample]["bam"],
     output:
         join(OUTPUT_DIR, "bed", "{sample}_methyl.bed"),
     log:
@@ -81,7 +76,7 @@ rule get_methylation_bed:
         -m {params.methylation} \
         -t {threads} \
         -e --aggregate --cpg \
-        {input.ref} {input.bam} > {output.bed} 2> {log}
+        {input.ref} {input.bam} > {output} 2> {log}
         """
 
 
@@ -93,7 +88,7 @@ rule get_methylation_bed:
 rule subset_meth:
     input:
         methylation_tsv=rules.get_methylation_bed.output,
-        target_bed=lambda wc: MANIFEST[wildcards.sample]["regions"],
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         subset_bed=join(OUTPUT_DIR, "bed", "{sample}_subset.bed"),
     log:
@@ -151,7 +146,7 @@ rule calc_windows:
     input:
         script="workflow/scripts/calculate_windows.py",
         methylation_tsv=rules.subset_meth.output.subset_bed,
-        target_bed=lambda wc: MANIFEST[wildcards.sample]["regions"],
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         binned_freq=join(OUTPUT_DIR, "bed", "{sample}_binned_freq.bed"),
     log:
@@ -276,7 +271,7 @@ rule in_threshold:
     input:
         script="workflow/scripts/in_threshold.py",
         intersect_bed=rules.intersect_RM.output.intersect_bed,
-        target_bed=lambda wc: MANIFEST[wildcards.sample]["regions"],
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         final_call=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),
         windows_call=join(OUTPUT_DIR, "bed", "{sample}_windows_CDR.bed"),
@@ -305,3 +300,9 @@ rule in_threshold:
         --report_threshold {params.report_threshold} \
         --edge_search {params.edge_search} 2> {log}
         """
+
+
+rule all:
+    input:
+        expand(rules.in_threshold.output, sample=MANIFEST.keys()),
+    default_target: True

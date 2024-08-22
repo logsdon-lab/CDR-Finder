@@ -1,6 +1,6 @@
 samples:
   CHM13:
-  	fasta: T2T-CHM13v2.fasta
+    fasta: T2T-CHM13v2.fasta
     regions: target_region.bed
     bam: T2T-CHM13v2.bam
 
@@ -14,6 +14,6 @@ report_threshold: 25000
 alr_threshold: 100000
 # Distance to search on the edge of CDRs to ensure that methylation reaches max around
 edge_search: 50000
-# Threshold for mean percent methylation to clear in order for standard calling, 
-## if below, it is assumed that this is the low end of the distribution and the windows will be taken based on what is 1/2 a standard deviation above the mean 
+# Threshold for mean percent methylation to clear in order for standard calling,
+## if below, it is assumed that this is the low end of the distribution and the windows will be taken based on what is 1/2 a standard deviation above the mean
 low_threshold: 39
