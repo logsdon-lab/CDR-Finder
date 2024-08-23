@@ -86,32 +86,11 @@ read_repeatmasker_bed <- function(input_file) {
 
 get_colors <- function() {
     default_colors <- c(
-        "#522758", "#5188c9",
-        "#4ea836", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#9370af", "#9370af",
+        "#522758",
         "#84bac6", "#84bac6",
-        "#f2b80b", "#ad8c2a",
-        "#E571AB", "#E571AB", "#E571AB",
-        "#FFFFFF", "#FFFFFF",
-        "#e1665e", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#508f52",
-        "#47b1b5", "#47b1b5",
-        "#47b1b5", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF", "#FFFFFF",
-        "#FFFFFF", "#FFFFFF", "#FFFFFF",
-        "#ad8c2a", "#136aaf"
+        "#f2b80b", "#ad8c2a"
     )
-    names(default_colors) <- levels(as.factor(c("ALR/Alpha", "BSR/Beta", "CER", "DNA", "DNA-Ac", "DNA-Tag1", "DNA-Tc1", "DNA?", "DNA/Merlin", "DNA/PIF-Harbinger", "GSAT", "GSATII", "HSat1A", "HSat1B", "HSat2", "HSat3", "LINE", "LINE-Tx1", "LINE/Penelope", "Low_complexity", "LSAU", "LTR", "RC/Helitron", "Retroposon/SVA", "rRNA", "Satellite/acro", "Satellite/subtelo", "SATR1", "SATR2", "scRNA", "Simple_repeat", "SINE", "SINE-RTE", "SINE/5S-Deu-L2", "snRNA", "srpRNA", "SST1", "tRNA")))
+    names(default_colors) <- levels(as.factor(c("ALR/Alpha", "HSat1A", "HSat1B", "HSat2", "HSat3")))
     return(default_colors)
 }
 
@@ -198,19 +177,32 @@ plt <- ggplot() +
         data = df_rm_out,
         aes(
             x = start,
-            y = 100,
+            y = 110,
             xend = end,
-            yend = 100,
+            yend = 110,
             colour = rClass
         ),
         linewidth = 10
     ) +
     scale_color_manual(values = get_colors()) +
-    facet_wrap(vars(chr), scales = "free_x") +
-    ylim(0, 100) +
+    facet_wrap(vars(chr), ncol = 1, scales = "free_x") +
+    ylim(0, 110) +
     scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit="")) +
     xlab("Position (Mbp)") +
     ylab("Average Methylation Percent") +
-    theme_classic()
+    labs(colour = "Repeats") +
+    theme_classic() +
+    theme(
+        # Place labels outside and remove bg.
+        strip.background = element_blank(),
+        strip.text = element_text(colour = 'black'),
+        strip.placement = "outside"
+    )
 
-ggsave("test.png", plt, width = 12, height = 4)
+ggsave(
+    argv$output,
+    plt,
+    width = 12,
+    height = nrow(df_target_regions) * 2.5,
+    limitsize = FALSE
+)

@@ -167,6 +167,7 @@ rule calc_windows:
         join(LOG_DIR, "calc_windows_{sample}.log"),
     benchmark:
         join(BMK_DIR, "calc_windows_{sample}.tsv")
+    threads: 1
     resources:
         mem=8,
         hrs=1,
@@ -180,7 +181,8 @@ rule calc_windows:
         python {input.script} \
         --target_bed {input.target_bed} \
         --methylation_tsv {input.methylation_tsv} \
-        --window_size {params.window_size} > {output} 2> {log}
+        --window_size {params.window_size} \
+        -p {threads} > {output} 2> {log}
         """
 
 
@@ -291,22 +293,37 @@ rule in_threshold:
         """
 
 
-# rule plot_cdr:
-#     input:
-#         script=""
-#     output:
-#         ""
-#     shell:
-#         """
-#         Rscript workflow/scripts/plot_cdr.R \
-#         --input_methyl results/bed/CHM13_binned_freq.bed \
-#         --input_rm results/bed/CHM13_rm.bed \
-#         --input_target_regions test/bed/CHM13_cen_500kbp.bed \
-#         --input_cdr results/bed/CHM13_CDR.bed
-#         """
+rule plot_cdr:
+    input:
+        script="workflow/scripts/plot_cdr.R",
+        binned_freq_bed=rules.calc_windows.output.binned_freq,
+        cdr_bed=rules.in_threshold.output.final_call,
+        rm_bed=rules.format_filter_RM.output.rm_bed,
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+    output:
+        join(OUTPUT_DIR, "plot", "{sample}_CDR.png"),
+    log:
+        join(LOG_DIR, "plot_cdr_{sample}.log"),
+    benchmark:
+        join(BMK_DIR, "plot_cdr_{sample}.tsv")
+    resources:
+        mem=8,
+        hrs=1,
+    conda:
+        "envs/r.yaml"
+    shell:
+        """
+        Rscript {input.script} \
+        --input_methyl {input.binned_freq_bed} \
+        --input_rm {input.rm_bed} \
+        --input_target_regions {input.target_bed} \
+        --input_cdr {input.cdr_bed} \
+        --output {output} 2> {log}
+        """
 
 
 rule all:
     input:
         expand(rules.in_threshold.output, sample=MANIFEST.keys()),
+        expand(rules.plot_cdr.output, sample=MANIFEST.keys()),
     default_target: True

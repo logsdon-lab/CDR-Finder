@@ -4,10 +4,10 @@ channels:
 dependencies:
   - r-base=4.3.2
   - r-ggplot2
-  - r-readr
   - r-argparser
   - r-ggnewscale
   - r-dplyr
   - r-tidyr
   - r-stringr
   - r-scales
+  - r-data.table
