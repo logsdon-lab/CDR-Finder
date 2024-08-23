@@ -6,8 +6,6 @@ samples:
 
 # Size of the methylation windows to average over
 window_size: 5000
-# Slide size of the methylation windows of the target region
-slide: 5000
 # Minimum size of CDR to report
 report_threshold: 25000
 # Size of ALR repeat stretches to include in search of CDR

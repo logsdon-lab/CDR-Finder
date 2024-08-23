@@ -1,5 +1,8 @@
 # Changes
 * Added basic test files with Git LFS
+* Added plot cdr R script.
+* Added output, log, and benchmark dir.
+* Remove singularity for rules.
 * Rewrote calculate_windows.py as unbearably slow.
     * Use intervaltrees for faster overlap detection.
     * Remove pandas and numpy.

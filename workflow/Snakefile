@@ -6,14 +6,13 @@ configfile: "config.yaml"
 
 MANIFEST = config["samples"]
 WINDOW = config["window_size"]
-SLIDE = config["slide"]
 REPORT_THRESHOLD = config.get("report_threshold", 25000)
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 EDGE_SEARCH = config.get("edge_search", 50000)
 LOW_THRESHOLD = config.get("low_threshold", 39)
-OUTPUT_DIR = "results"
-LOG_DIR = "logs"
-BMK_DIR = "benchmarks"
+OUTPUT_DIR = config.get("output_dir", "results")
+LOG_DIR = config.get("log_dir", "logs")
+BMK_DIR = config.get("benchmark_dir", "benchmarks")
 
 
 wildcard_constraints:

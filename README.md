@@ -1,6 +1,8 @@
 # CDR-Finder
 This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
 
+![](docs/CHM13_CDR.png)
+
 Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 
 Adapted and distributed by @fkmastrorosa and @wharvey31
@@ -15,16 +17,97 @@ This is done by:
 - Checks if flanking bins with greater than maximum methylation percentage (defined as within 1 standard deviation from the maximum)
 - Checks if the CDR calls are smaller than a user-specified threshold
 
-# Input
-- fasta: sample genome assembly
-- target_bed: BED file of target region coordinates
-- meth_tsv: modbam2bed methylation BED
 
-# Output
-Based on the mean methylation frequency across the region, identifies and bins regions with methylation frequency below mean spanning >25 kbp.
-```
-results/{sample}_CDR.bed
+## Getting Started
+```bash
+git clone https://github.com/koisland/CDR-Finder
+cd CDR-Finder
 ```
 
-# Requirements
-This pipeline requires snakemake, singularity, and the python packages pandas and numpy.
+To setup with `conda`:
+```bash
+conda env create --name cdr_finder -f env.yaml
+```
+
+To setup with `singularity` or `docker`:
+```bash
+# TODO
+```
+
+## Usage
+To run with `conda`.
+```bash
+snakemake -np --sdm conda -c 4
+```
+
+To run with `singularity` or `docker`.
+```bash
+# TODO
+```
+
+Or alternatively to add as a workflow to an existing Snakefile.
+```bash
+git submodule add https://github.com/koisland/CDR-Finder
+```
+
+```python
+# Pass CDR config here.
+CDR_CONFIG = {}
+
+module CDRFinder:
+    snakefile:
+        "CDR-Finder/workflow/Snakefile"
+    config:
+        CDR_CONFIG
+
+use * from CDRFinder as cdr_*
+
+rule all:
+    input:
+        rules.cdr_all.input
+```
+
+## Input
+Multiple samples can be provided via the configfile. Each sample should contain the following:
+- `fasta`
+    * Genome assembly.
+- `bamfile`
+    * Alignment BAM file with methylation tags.
+    * Requires aligned reads with the Mm and Ml tags (MM and ML also supported), and the reference sequence used for alignment.
+    * https://github.com/epi2me-labs/modbam2bed?tab=readme-ov-file#usage
+- `regions`
+    * BED file of target region coordinates.
+
+## Output
+- `cdr_bed`
+    * CDR regions.
+    * Based on the mean methylation frequency across the region, identifies and bins regions into `config.window_size` with methylation frequency below mean spanning `config.report_threshold`.
+    * `{config.output_dir}/bed/{sample}_CDR.bed`
+- `cdr_plot`
+    * CDR regions plotted with RepeatMasker annotations.
+    * `{config.output_dir}/plot/{sample}_CDR.png`
+
+## Parameters
+|parameter|description|default|
+|-|-|-|
+|`window_size`|Size of the methylation windows to average over.|5000|
+|`report_threshold`|Minimum size of CDR to report.|25000|
+|`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100000|
+|`edge_search`| Distance to search on the edge of CDRs to ensure that methylation reaches max around.|50000|
+|`low_threshold`|Threshold for mean percent methylation to clear in order for standard calling. If below, it is assumed that this is the low end of the distribution and the windows will be taken based on what is 1/2 a standard deviation above the mean.|39|
+
+## Testing
+Set up conda environment.
+```bash
+conda env create --name test_cdr_finder -f env_dev.yaml
+```
+
+To run the test case on chr8 and chr21.
+```bash
+snakemake -c 1 -p --sdm conda test/config/config.yaml
+```
+
+To run integration tests.
+```bash
+pytest -vvv
+```
