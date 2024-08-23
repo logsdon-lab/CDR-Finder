@@ -1,7 +1,10 @@
 channels:
+  - conda-forge
   - bioconda
   - epi2melabs
 dependencies:
-  - repeatmasker
+  - repeatmasker==4.1.0
   - bedtools
   - modbam2bed
+  - samtools
+  - htslib==1.16

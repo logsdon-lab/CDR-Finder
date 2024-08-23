@@ -2,3 +2,6 @@
 results/
 logs/
 benchmarks/
+RM*/
+__pycache__/
+*.pdf

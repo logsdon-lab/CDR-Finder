@@ -1,2 +1,5 @@
-test/bam/CHM13_chr8_chr21.bam filter=lfs diff=lfs merge=lfs -text
-test/fa/CHM13_chr8_chr21.fa.gz filter=lfs diff=lfs merge=lfs -text
+test/data/bam/CHM13_chr8_chr21.bam filter=lfs diff=lfs merge=lfs -text
+test/data/fa/CHM13_chr8_chr21.fa.gz filter=lfs diff=lfs merge=lfs -text
+test/calculate_windows/expected/expected_bin_freq.bed filter=lfs diff=lfs merge=lfs -text
+test/calculate_windows/expected/original_bin_freq.bed filter=lfs diff=lfs merge=lfs -text
+test/calculate_windows/input/CHM13_methyl.bed filter=lfs diff=lfs merge=lfs -text

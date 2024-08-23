@@ -1,4 +1,3 @@
-import sys
 import argparse
 import pandas as pd
 import numpy as np
@@ -25,33 +24,37 @@ def main():
         index_col="idx",
     )
     with open(args.target_bed) as infile, open(args.final_call, "w+") as outfile:
-        # Evaluate over all windows in target bed        
+        # Evaluate over all windows in target bed
         for line in infile:
+            line = line.strip().split("\t")
             # Empty dataframe for windows
             window_avg_all = pd.DataFrame(columns=["Bin", "Freq"])
             # Parse target bed
-            chrom, start = line.split("\t")[0], line.split("\t")[1]
+            chrom, start = line[0], line[1]
+
             # Subset to chromosome
             intersect_bed_sub = intersect_bed.loc[intersect_bed["chrom"] == chrom]
             # Convert intersect bed to expected format for df
             for index in intersect_bed_sub.index:
-                chrom_int = intersect_bed_sub.at[index, "chrom"]
                 start_int = int(intersect_bed_sub.at[index, "start"]) + int(start)
                 stop_int = int(intersect_bed_sub.at[index, "stop"]) + int(start)
                 freq = intersect_bed_sub.at[index, "freq"]
-                new_row2 = pd.DataFrame({
-                    "Bin": [str(start_int) + "-" + str(stop_int)],
-                    "pos": [start_int],
-                    "end": [stop_int],
-                    "Freq": [float(freq)],
-                    "idx_2": [index]
-                })
-                window_avg_all = pd.concat([window_avg_all, new_row2], ignore_index=True)
+                new_row2 = pd.DataFrame(
+                    {
+                        "Bin": [str(start_int) + "-" + str(stop_int)],
+                        "pos": [start_int],
+                        "end": [stop_int],
+                        "Freq": [float(freq)],
+                        "idx_2": [index],
+                    }
+                )
+                window_avg_all = pd.concat(
+                    [window_avg_all, new_row2], ignore_index=True
+                )
 
             window_avg_all["idx_2"] = window_avg_all["idx_2"].astype(int)
             window_avg_all = window_avg_all.set_index("idx_2")
             # Establish threshold, stddev, max
-            median_freq = np.median(window_avg_all["Freq"])
             stddev_freq = np.std(window_avg_all["Freq"])
             max_freq = max(window_avg_all["Freq"])
             mean_freq = np.mean(window_avg_all["Freq"])
@@ -64,7 +67,7 @@ def main():
                 ].copy()
             # If methylation mean is low (small centromeres with more windows in CDR than not)
             else:
-                threshold = mean_freq + 1 * (stddev_freq/2)
+                threshold = mean_freq + 1 * (stddev_freq / 2)
                 window_avg_under = window_avg_all.loc[
                     ~(window_avg_all["Freq"] > threshold)
                 ].copy()
@@ -73,9 +76,7 @@ def main():
             groups = (
                 s.groupby(s.diff().ne(1).cumsum())
                 .apply(
-                    lambda x: [x.iloc[0], x.iloc[-1]]
-                    if len(x) >= 2
-                    else [x.iloc[0]]
+                    lambda x: [x.iloc[0], x.iloc[-1]] if len(x) >= 2 else [x.iloc[0]]
                 )
                 .tolist()
             )
@@ -98,10 +99,7 @@ def main():
                         initial_index_list[i] + 1 : initial_index_list[i + 1] - 1
                     ]
                     # If one window is within one stddev of the max, do not add gap
-                    if (
-                        len(gap_df.loc[gap_df["Freq"] > (max_freq - stddev_freq)])
-                        == 0
-                    ):
+                    if len(gap_df.loc[gap_df["Freq"] > (max_freq - stddev_freq)]) == 0:
                         check_df = pd.concat([check_df, gap_df])
                     else:
                         continue
@@ -110,9 +108,7 @@ def main():
             groups = (
                 s.groupby(s.diff().ne(1).cumsum())
                 .apply(
-                    lambda x: [x.iloc[0], x.iloc[-1]]
-                    if len(x) >= 2
-                    else [x.iloc[0]]
+                    lambda x: [x.iloc[0], x.iloc[-1]] if len(x) >= 2 else [x.iloc[0]]
                 )
                 .tolist()
             )
@@ -123,10 +119,19 @@ def main():
                 pos1 = int(check_df.at[y[0], "Bin"].split("-")[0])
                 pos2 = int(check_df.at[y[1], "Bin"].split("-")[1])
                 # left_check and right_check are checking for flanking peaks of high methylation frequency
-                left_check = window_avg_all.loc[(window_avg_all['end'] < pos1 ) & (window_avg_all['end'] >= pos1-args.edge_search )].copy()
-                right_check = window_avg_all.loc[(window_avg_all['end'] > pos2 ) & (window_avg_all['end'] <= pos2+args.edge_search )].copy()
+                left_check = window_avg_all.loc[
+                    (window_avg_all["end"] < pos1)
+                    & (window_avg_all["end"] >= pos1 - args.edge_search)
+                ].copy()
+                right_check = window_avg_all.loc[
+                    (window_avg_all["end"] > pos2)
+                    & (window_avg_all["end"] <= pos2 + args.edge_search)
+                ].copy()
                 # If neighbors are found on either side label as high confidence
-                if np.max(right_check['Freq']) > max_thresh and np.max(left_check['Freq']) > max_thresh:
+                if (
+                    np.max(right_check["Freq"]) > max_thresh
+                    and np.max(left_check["Freq"]) > max_thresh
+                ):
                     confidence = "high_confidence"
                 # Else assign and label low confidence
                 else:
@@ -137,8 +142,8 @@ def main():
                 # Write to output bed file
                 outfile.write(f"{chrom}\t{pos1}\t{pos2}\t{confidence}\n")
                 # Add to combined DF
-                window_df_out = pd.concat([window_df_out, check_df.loc[y[0]:y[1]]])
-            window_df_out.to_csv(args.windows_call, sep='\t', index=False)
+                window_df_out = pd.concat([window_df_out, check_df.loc[y[0] : y[1]]])
+            window_df_out.to_csv(args.windows_call, sep="\t", index=False)
 
 
 if __name__ == "__main__":

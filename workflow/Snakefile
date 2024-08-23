@@ -55,12 +55,14 @@ rule get_methylation_bed:
         ref=lambda wc: MANIFEST[wc.sample]["fasta"],
         bam=lambda wc: MANIFEST[wc.sample]["bam"],
     output:
-        join(OUTPUT_DIR, "bed", "{sample}_methyl.bed"),
+        methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_methyl.bed"),
+        cpg_bed=join(OUTPUT_DIR, "bed", "{sample}.cpg.acc.bed"),
     log:
         join(LOG_DIR, "get_methylation_bed_{sample}.log"),
     benchmark:
         join(BMK_DIR, "get_methylation_bed_{sample}.tsv")
     params:
+        cpg_bed=lambda wc, output: os.path.basename(output.cpg_bed),
         output_file_prefix="{sample}",
         methylation="5mC",
     threads: 1
@@ -71,12 +73,14 @@ rule get_methylation_bed:
         "envs/tools.yaml"
     shell:
         """
+        samtools index {input.bam} 2> {log}
         modbam2bed \
         -p {params.output_file_prefix} \
         -m {params.methylation} \
         -t {threads} \
         -e --aggregate --cpg \
-        {input.ref} {input.bam} > {output} 2> {log}
+        {input.ref} {input.bam} > {output.methyl_bed} 2> {log}
+        mv {params.cpg_bed} {output.cpg_bed}
         """
 
 
@@ -87,7 +91,7 @@ rule get_methylation_bed:
 
 rule subset_meth:
     input:
-        methylation_tsv=rules.get_methylation_bed.output,
+        methylation_tsv=rules.get_methylation_bed.output.methyl_bed,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         subset_bed=join(OUTPUT_DIR, "bed", "{sample}_subset.bed"),
@@ -125,6 +129,10 @@ rule run_rm:
         join(LOG_DIR, "run_rm_{sample}.log"),
     benchmark:
         join(BMK_DIR, "run_rm_{sample}.tsv")
+    params:
+        engine="rmblast",
+        species="human",
+        output_dir=lambda wc, output: os.path.dirname(str(output)),
     resources:
         mem=8,
         hrs=12,
@@ -133,7 +141,13 @@ rule run_rm:
         "envs/tools.yaml"
     shell:
         """
-        RepeatMasker -species human -dir $( dirname {output.rm_out} ) -qq -pa {threads} {input.fasta} 2> {log}
+        RepeatMasker \
+        -engine {params.engine} \
+        -species {params.species} \
+        -dir {params.output_dir} \
+        -qq \
+        -pa {threads} \
+        {input.fasta} > {log}
         """
 
 
@@ -161,14 +175,12 @@ rule calc_windows:
         "envs/python.yaml"
     params:
         window_size=WINDOW,
-        slide=SLIDE,
     shell:
         """
         python {input.script} \
         --target_bed {input.target_bed} \
         --methylation_tsv {input.methylation_tsv} \
-        --window_size {params.window_size} \
-        --slide {params.slide} > {output} 2> {log}
+        --window_size {params.window_size} > {output} 2> {log}
         """
 
 
@@ -181,7 +193,8 @@ rule format_filter_RM:
     input:
         rm_out=rules.run_rm.output.rm_out,
     output:
-        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR.bed"),
+        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm.bed"),
+        rm_alr_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR.bed"),
     log:
         join(LOG_DIR, "format_filter_RM_{sample}.log"),
     resources:
@@ -192,38 +205,14 @@ rule format_filter_RM:
     threads: 1
     shell:
         """
-        {{
-            awk -v OFS="\\t" '{{
-                split($5, ":", chr_names)
+        awk -v OFS="\\t" 'NR > 3 {{
+            split($5, chr_names, ":")
+            print chr_names[1], $6, $7, $10, $11, $9 > "{output.rm_bed}"
+            if ( $10 ~ "ALR" ) {{
                 print chr_names[1], $6, $7, $10, $9
-            }}' {input.rm_out} | \
-            grep "ALR" ;}} > {output.rm_bed} 2> {log}
+            }}
+        }}' {input.rm_out} > {output.rm_alr_bed} 2> {log}
         """
-
-
-# ###
-# # Filter RM: Returns Repeatmasker bed contig name to original fasta name
-# ###
-
-
-# rule filter_RM:
-#     input:
-#         repeat_masker=rules.format_RM.output.repeat_bed,
-#     output:
-#         rm_bed="results/{sample}_rm_ALR.bed",
-#     resources:
-#         mem=8,
-#         hrs=1,
-#     threads: 1
-#     run:
-#         RM_df = pd.read_csv(
-#             input.repeat_masker,
-#             header=None,
-#             sep="\t",
-#             names=["chr", "start", "stop", "ALR", "or"],
-#         )
-#         RM_df["chr"] = RM_df["chr"].str.split(pat=":").str[0]
-#         RM_df.to_csv(output.rm_bed, header=None, index=None, sep="\t")
 
 
 ###
@@ -234,7 +223,7 @@ rule format_filter_RM:
 
 rule intersect_RM:
     input:
-        repeat_masker=rules.format_filter_RM.output.rm_bed,
+        repeat_masker=rules.format_filter_RM.output.rm_alr_bed,
         binned_freq=rules.calc_windows.output.binned_freq,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
@@ -300,6 +289,21 @@ rule in_threshold:
         --report_threshold {params.report_threshold} \
         --edge_search {params.edge_search} 2> {log}
         """
+
+
+# rule plot_cdr:
+#     input:
+#         script=""
+#     output:
+#         ""
+#     shell:
+#         """
+#         Rscript workflow/scripts/plot_cdr.R \
+#         --input_methyl results/bed/CHM13_binned_freq.bed \
+#         --input_rm results/bed/CHM13_rm.bed \
+#         --input_target_regions test/bed/CHM13_cen_500kbp.bed \
+#         --input_cdr results/bed/CHM13_CDR.bed
+#         """
 
 
 rule all:
