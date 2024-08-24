@@ -4,6 +4,9 @@ from os.path import join
 configfile: "config.yaml"
 
 
+containerized: "docker://logsdonlab/cdr-finder:latest"
+
+
 MANIFEST = config["samples"]
 WINDOW = config["window_size"]
 REPORT_THRESHOLD = config.get("report_threshold", 25000)

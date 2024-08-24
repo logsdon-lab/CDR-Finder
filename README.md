@@ -27,11 +27,13 @@ cd CDR-Finder
 To setup with `conda`:
 ```bash
 conda env create --name cdr_finder -f env.yaml
+conda activate cdr_finder
 ```
 
-To setup with `singularity` or `docker`:
+If using `singularity`, only `snakemake` is required. This will create a python virtual environment and install `snakemake`.
 ```bash
-# TODO
+python -m venv venv && source venv/bin/activate
+pip install snakemake
 ```
 
 ## Usage
@@ -40,9 +42,9 @@ To run with `conda`.
 snakemake -np --sdm conda -c 4
 ```
 
-To run with `singularity` or `docker`.
+To run with `singularity`. This will use [`logsdonlab/cdr-finder`](https://hub.docker.com/r/logsdonlab/cdr-finder) to run the workflow.
 ```bash
-# TODO
+snakemake -np --sdm apptainer conda  -c 4
 ```
 
 Or alternatively to add as a workflow to an existing Snakefile.
@@ -110,4 +112,14 @@ snakemake -c 1 -p --sdm conda test/config/config.yaml
 To run integration tests.
 ```bash
 pytest -vvv
+```
+
+## Containerization
+Requires `root` user and `docker`.
+```bash
+make docker
+```
+
+```bash
+make singularity
 ```

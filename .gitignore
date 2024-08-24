@@ -2,6 +2,11 @@
 results/
 logs/
 benchmarks/
+
 RM*/
+.RepeatMaskerCache/
+.cache/
 __pycache__/
+
 *.pdf
+*.sif
