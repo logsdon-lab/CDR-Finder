@@ -32,4 +32,5 @@ jobs:
         snakemake -c 2 -p \
         --sdm apptainer conda \
         --configfile test/config/config.yaml \
-        --show-failed-logs
+        --show-failed-logs \
+        --apptainer-args "--bind $HOME:$HOME"
