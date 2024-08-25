@@ -31,5 +31,5 @@ jobs:
       run: |
         snakemake -c 2 -p \
         --sdm apptainer conda \
-        --configfile test/config/config.yaml
-        --show-failed-logs \
+        --configfile test/config/config.yaml \
+        --show-failed-logs
