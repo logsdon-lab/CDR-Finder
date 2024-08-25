@@ -62,7 +62,7 @@ module CDRFinder:
     config:
         CDR_CONFIG
 
-use * from CDRFinder as cdr_*
+use rule * from CDRFinder as cdr_*
 
 rule all:
     input:

@@ -160,7 +160,7 @@ rule run_rm:
 
 rule calc_windows:
     input:
-        script="workflow/scripts/calculate_windows.py",
+        script=workflow.source_path("scripts/calculate_windows.py"),
         methylation_tsv=rules.subset_meth.output.subset_bed,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
@@ -262,7 +262,7 @@ rule intersect_RM:
 
 rule in_threshold:
     input:
-        script="workflow/scripts/in_threshold.py",
+        script=workflow.source_path("scripts/in_threshold.py"),
         intersect_bed=rules.intersect_RM.output.intersect_bed,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
@@ -297,7 +297,7 @@ rule in_threshold:
 
 rule plot_cdr:
     input:
-        script="workflow/scripts/plot_cdr.R",
+        script=workflow.source_path("scripts/plot_cdr.R"),
         binned_freq_bed=rules.calc_windows.output.binned_freq,
         cdr_bed=rules.in_threshold.output.final_call,
         rm_bed=rules.format_filter_RM.output.rm_bed,

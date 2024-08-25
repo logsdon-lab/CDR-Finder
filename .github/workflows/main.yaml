@@ -1,0 +1,35 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout directory.
+      uses: actions/checkout@v3
+      with:
+        lfs: 'true'
+
+    - name: Install Python.
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Snakemake and testing dependencies.
+      run: |
+        pip install -r <(yq -r '.dependencies[] | select(type == "!!map") | to_entries[].value[]' env_dev.yaml)
+
+    - name: Install Singularity.
+      uses: singularityhub/install-singularity@main
+
+    - name: Test scripts.
+      run: |
+        pytest -vvv
+
+    - name: Test run chr8 and chr21 workflow.
+      run: |
+        snakemake -c 2 -p \
+        --sdm apptainer conda \
+        --configfile test/config/config.yaml
+        --show-failed-logs \
