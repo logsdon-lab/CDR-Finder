@@ -1,4 +1,6 @@
 # CDR-Finder
+[![CI](https://github.com/koisland/CDR-Finder/actions/workflows/main.yaml/badge.svg)](https://github.com/koisland/CDR-Finder/actions/workflows/main.yaml)
+
 This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
 
 ![](docs/CHM13_CDR.png)
