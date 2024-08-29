@@ -295,15 +295,34 @@ rule in_threshold:
         """
 
 
+rule get_coverage:
+    input:
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        bam=lambda wc: MANIFEST[wc.sample]["bam"],
+    output:
+        join(OUTPUT_DIR, "bed", "{sample}_coverage.tsv"),
+    conda:
+        "envs/tools.yaml"
+    log:
+        join(LOG_DIR, "get_coverage_{sample}.log"),
+    benchmark:
+        join(BMK_DIR, "get_coverage_{sample}.tsv")
+    shell:
+        """
+        samtools depth {input.bam} -b {input.target_bed} > {output} 2> {log}
+        """
+
+
 rule plot_cdr:
     input:
         script=workflow.source_path("scripts/plot_cdr.R"),
         binned_freq_bed=rules.calc_windows.output.binned_freq,
         cdr_bed=rules.in_threshold.output.final_call,
         rm_bed=rules.format_filter_RM.output.rm_bed,
+        cov_tsv=rules.get_coverage.output,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
-        join(OUTPUT_DIR, "plot", "{sample}_CDR.png"),
+        directory(join(OUTPUT_DIR, "plot", "{sample}")),
     log:
         join(LOG_DIR, "plot_cdr_{sample}.log"),
     benchmark:
@@ -319,8 +338,9 @@ rule plot_cdr:
         --input_methyl {input.binned_freq_bed} \
         --input_rm {input.rm_bed} \
         --input_target_regions {input.target_bed} \
+        --input_coverage {input.cov_tsv} \
         --input_cdr {input.cdr_bed} \
-        --output {output} 2> {log}
+        --output_dir {output} 2> {log}
         """
 
 

@@ -6,6 +6,7 @@ library(stringr)
 library(argparser)
 library(data.table)
 library(ggnewscale)
+library(patchwork)
 
 
 reformat_repeatmasker_bed <- function(df) {
@@ -112,20 +113,26 @@ p <- add_argument(
   help = "Input target regions.", type = "character"
 )
 p <- add_argument(
-  p, "--output",
-  help = "Output binned average methylation frequency plot PNG.", type = "character",
-  default = "plot.png"
+  p, "--input_coverage",
+  help = "Input coverage.", type = "character"
+)
+p <- add_argument(
+  p, "--output_dir",
+  help = "Output directory of binned average methylation frequency plot PNG.", type = "character",
+  default = "plot"
 )
 argv <- parse_args(p)
 
 df_target_regions <- fread(
     argv$input_target_regions,
     header = FALSE,
+    select = c(1:3),
     col.names = c("chr", "start", "end")
 )
 df_cdr <- fread(
     argv$input_cdr,
     header = FALSE,
+    select = c(1:4),
     col.names = c("chr", "start", "end", "desc")
 )
 df_cdr <- df_cdr %>% filter(desc == "high_confidence")
@@ -134,6 +141,7 @@ df_cdr <- df_cdr %>% filter(desc == "high_confidence")
 df_methyl_binned <- fread(
     argv$input_methyl,
     header = FALSE,
+    select = c(1:5),
     col.names = c("chr", "start", "end", "meth_prob", "index")
 )
 # Adjust coordinates
@@ -152,57 +160,102 @@ df_rm_out <- read_repeatmasker_bed(argv$input_rm) %>%
         end = end2 + start.y,
     )
 
+df_cov <- fread(
+    argv$input_coverage,
+    header = FALSE,
+    col.names = c("chr", "start", "cov")
+)
+
+# Make directory
+dir.create(argv$output_dir, showWarnings = FALSE)
+
+# 1st coverage, 2nd chr, 3rd average methylation freq
 # Plot bins
-plt <- ggplot() +
-    geom_area(
-        data = df_methyl_binned,
-        aes(x = start, y = as.numeric(meth_prob)),
-        fill = "#008080",
-        colour = "black",
-        alpha = 0.5
+for (chr_name in unique(df_methyl_binned$chr)) {
+    plt_cov <- ggplot(
+        data = df_cov %>% filter(chr == chr_name),
+        aes(x = start, y = cov),
     ) +
-    geom_rect(
-        data = df_cdr,
-        aes(
-            xmin = start,
-            ymin = 0,
-            xmax = end,
-            ymax = 100,
-        ),
-        fill = "red",
-        alpha = 0.5
-    ) +
-    new_scale_color() +
-    geom_segment(
-        data = df_rm_out,
-        aes(
-            x = start,
-            y = 110,
-            xend = end,
-            yend = 110,
-            colour = rClass
-        ),
-        linewidth = 10
-    ) +
-    scale_color_manual(values = get_colors()) +
-    facet_wrap(vars(chr), ncol = 1, scales = "free_x") +
-    ylim(0, 110) +
-    scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit="")) +
-    xlab("Position (Mbp)") +
-    ylab("Average Methylation Percent") +
-    labs(colour = "Repeats") +
+    geom_area(position = "identity") +
+    ylab("Read Depth") +
     theme_classic() +
     theme(
-        # Place labels outside and remove bg.
-        strip.background = element_blank(),
-        strip.text = element_text(colour = 'black'),
-        strip.placement = "outside"
+        axis.title.x =  element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank(),
     )
 
-ggsave(
-    argv$output,
-    plt,
-    width = 12,
-    height = nrow(df_target_regions) * 2.5,
-    limitsize = FALSE
-)
+    plt_methyl <- ggplot() +
+        geom_segment(
+            data = df_cdr %>% filter(chr == chr_name),
+            aes(x = start, y = 125, xend = end, yend = 125),
+        ) +
+        geom_segment(
+            data = df_rm_out %>% filter(chr == chr_name),
+            aes(
+                x = start,
+                y = 115,
+                xend = end,
+                yend = 115,
+                colour = rClass
+            ),
+            linewidth = 10
+        ) +
+        scale_color_manual(values = get_colors()) +
+        labs(colour = "Repeats") +
+        geom_area(
+            data = df_methyl_binned %>% filter(chr == chr_name),
+            aes(x = start, y = as.numeric(meth_prob)),
+            fill = "black",
+        ) +
+        # Annotate CDR with with red overlap rectangle and horizontal bar.
+        geom_rect(
+            data = df_cdr %>% filter(chr == chr_name),
+            aes(
+                xmin = start,
+                ymin = 0,
+                xmax = end,
+                ymax = 100,
+            ),
+            fill = "red",
+            alpha = 0.5
+        ) +
+        scale_y_continuous(
+            labels = unit_format(unit="%"),
+            breaks = seq(0, 100, by = 20)
+        ) +
+        ylab("Average Methylation Percent") +
+        theme_classic() +
+        theme(
+            axis.line.x = element_blank(),
+            axis.line.y = element_blank(),
+        )
+
+    plt_ht_prop <- c(1.5, 3)
+    plt_final <- plt_cov / plt_methyl +
+        plot_layout(
+            ncol = 1,
+            heights = unit(plt_ht_prop, c('null', 'null'))
+        ) &
+        scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit="")) &
+        xlab("Position (Mbp)")
+
+    outfile_pdf <- file.path(argv$output, paste0(chr_name, ".pdf"))
+    outfile_png <- file.path(argv$output, paste0(chr_name, ".png"))
+    ggsave(
+        outfile_pdf,
+        device = "pdf",
+        plt_final,
+        width = 12,
+        height = sum(plt_ht_prop),
+    )
+    ggsave(
+        outfile_png,
+        device = "png",
+        plt_final,
+        width = 12,
+        height = sum(plt_ht_prop),
+    )
+}
