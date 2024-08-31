@@ -56,18 +56,19 @@ rule get_methylation_bed:
     input:
         ref=lambda wc: MANIFEST[wc.sample]["fasta"],
         bam=lambda wc: MANIFEST[wc.sample]["bam"],
+        region=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_methyl.bed"),
-        cpg_bed=join(OUTPUT_DIR, "bed", "{sample}.cpg.acc.bed"),
     log:
         join(LOG_DIR, "get_methylation_bed_{sample}.log"),
     benchmark:
         join(BMK_DIR, "get_methylation_bed_{sample}.tsv")
     params:
-        cpg_bed=lambda wc, output: os.path.basename(output.cpg_bed),
-        output_file_prefix="{sample}",
-        methylation="5mC",
-    threads: 1
+        preset="traditional",
+        ref=lambda wc, input: f"<(zcat {input.ref})"
+        if str(input.ref).endswith(".gz")
+        else input.ref,
+    threads: 4
     resources:
         mem=8,
         hrs=1,
@@ -76,40 +77,11 @@ rule get_methylation_bed:
     shell:
         """
         samtools index {input.bam} 2> {log}
-        modbam2bed \
-        -p {params.output_file_prefix} \
-        -m {params.methylation} \
-        -t {threads} \
-        -e --aggregate --cpg \
-        {input.ref} {input.bam} > {output.methyl_bed} 2> {log}
-        mv {params.cpg_bed} {output.cpg_bed}
-        """
-
-
-###
-# Subset meth: Intersects target bed with methylation bed
-###
-
-
-rule subset_meth:
-    input:
-        methylation_tsv=rules.get_methylation_bed.output.methyl_bed,
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
-    output:
-        subset_bed=join(OUTPUT_DIR, "bed", "{sample}_subset.bed"),
-    log:
-        join(LOG_DIR, "subset_meth_{sample}.log"),
-    benchmark:
-        join(BMK_DIR, "subset_meth_{sample}.tsv")
-    resources:
-        mem=8,
-        hrs=12,
-    threads: 1
-    conda:
-        "envs/tools.yaml"
-    shell:
-        """
-        bedtools intersect -a {input.methylation_tsv} -b {input.target_bed} -wa > {output.subset_bed} 2> {log}
+        modkit pileup {input.bam} {output.methyl_bed} \
+        --include-bed {input.region} \
+        --threads {threads} \
+        --ref {params.ref} \
+        --preset {params.preset} 2>> {log}
         """
 
 
@@ -161,7 +133,7 @@ rule run_rm:
 rule calc_windows:
     input:
         script=workflow.source_path("scripts/calculate_windows.py"),
-        methylation_tsv=rules.subset_meth.output.subset_bed,
+        methylation_tsv=rules.get_methylation_bed.output,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         binned_freq=join(OUTPUT_DIR, "bed", "{sample}_binned_freq.bed"),
@@ -295,31 +267,12 @@ rule in_threshold:
         """
 
 
-rule get_coverage:
-    input:
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
-        bam=lambda wc: MANIFEST[wc.sample]["bam"],
-    output:
-        join(OUTPUT_DIR, "bed", "{sample}_coverage.tsv"),
-    conda:
-        "envs/tools.yaml"
-    log:
-        join(LOG_DIR, "get_coverage_{sample}.log"),
-    benchmark:
-        join(BMK_DIR, "get_coverage_{sample}.tsv")
-    shell:
-        """
-        samtools depth {input.bam} -b {input.target_bed} > {output} 2> {log}
-        """
-
-
 rule plot_cdr:
     input:
         script=workflow.source_path("scripts/plot_cdr.R"),
         binned_freq_bed=rules.calc_windows.output.binned_freq,
         cdr_bed=rules.in_threshold.output.final_call,
         rm_bed=rules.format_filter_RM.output.rm_bed,
-        cov_tsv=rules.get_coverage.output,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         directory(join(OUTPUT_DIR, "plot", "{sample}")),
@@ -338,7 +291,6 @@ rule plot_cdr:
         --input_methyl {input.binned_freq_bed} \
         --input_rm {input.rm_bed} \
         --input_target_regions {input.target_bed} \
-        --input_coverage {input.cov_tsv} \
         --input_cdr {input.cdr_bed} \
         --output_dir {output} 2> {log}
         """

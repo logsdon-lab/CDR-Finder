@@ -20,7 +20,7 @@ def main():
         args.intersect_bed,
         header=None,
         sep="\t",
-        names=["chrom", "start", "stop", "freq", "idx"],
+        names=["chrom", "start", "stop", "freq", "cov", "idx"],
         index_col="idx",
     )
     with open(args.target_bed) as infile, open(args.final_call, "w+") as outfile:

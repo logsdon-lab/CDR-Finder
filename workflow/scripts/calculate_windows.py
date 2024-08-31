@@ -1,6 +1,7 @@
 import sys
 import math
 import argparse
+import statistics
 import itertools
 import multiprocessing as mp
 
@@ -21,17 +22,19 @@ METH_BED_COLS = [
     "n3",
     "coverage",
     "freq",
-    "ncanon",
     "nmod",
-    "nfilt",
-    "nnocall",
+    "ncanon",
     "naltmod",
+    "ndel",
+    "nfail",
+    "ndiff",
+    "nnocall",
 ]
 
 
 def bin_freq(
     chrom: str, start: int, stop: int, meth_intervals: IntervalTree, window_size: int
-) -> list[tuple[str, int, int, float]]:
+) -> list[tuple[str, int, int, float, int]]:
     sys.stderr.write(
         f"Calculating average methylation frequency for {chrom}:{start}-{stop}\n"
     )
@@ -58,17 +61,19 @@ def bin_freq(
 
         # Use bin start/stop rather than absolute start/stop
         bin_start, bin_stop = window.begin - start, window.end - start
-        avg_meth = round(sum(i.data for i in window_overlap) / len(window_overlap), 2)
+        perc_methyl, coverage = zip(*(i.data for i in window_overlap))
+        avg_meth = round(statistics.mean(perc_methyl), 2)
+        avg_cov = round(statistics.mean(coverage), 2)
 
         # Removed index.
-        averaged_intervals.append((chrom, bin_start, bin_stop, avg_meth))
+        averaged_intervals.append((chrom, bin_start, bin_stop, avg_meth, avg_cov))
 
     return averaged_intervals
 
 
 def average_methyl_freq_windows(
     target_bed: str, methylation_tsv: str, processes: int, window_size: int
-) -> Generator[tuple[str, int, int, float], None, None]:
+) -> Generator[tuple[str, int, int, float, int], None, None]:
     """
     Average methylation frequency across a given window size and target region.
     """
@@ -92,7 +97,9 @@ def average_methyl_freq_windows(
                     freq = 0.0
 
                 interval = Interval(
-                    int(line_info["start"]), int(line_info["end"]), freq
+                    int(line_info["start"]),
+                    int(line_info["end"]),
+                    (freq, int(line_info["coverage"])),
                 )
                 meth_intervals[line_info["chrom"]].add(interval)
             except ValueError:
@@ -161,12 +168,14 @@ def main() -> None:
     args = ap.parse_args()
 
     # Dunno why you need an index but I'll keep it in.
-    for i, (chrom, start, stop, avg_meth) in enumerate(
+    for i, (chrom, start, stop, avg_meth, avg_cov) in enumerate(
         average_methyl_freq_windows(
             args.target_bed, args.methylation_tsv, args.processes, args.window_size
         )
     ):
-        args.binned_freq.write(f"{chrom}\t{start}\t{stop}\t{avg_meth}\t{i}\n")
+        args.binned_freq.write(
+            f"{chrom}\t{start}\t{stop}\t{avg_meth}\t{avg_cov}\t{i}\n"
+        )
 
 
 if __name__ == "__main__":

@@ -113,10 +113,6 @@ p <- add_argument(
   help = "Input target regions.", type = "character"
 )
 p <- add_argument(
-  p, "--input_coverage",
-  help = "Input coverage.", type = "character"
-)
-p <- add_argument(
   p, "--output_dir",
   help = "Output directory of binned average methylation frequency plot PNG.", type = "character",
   default = "plot"
@@ -141,8 +137,8 @@ df_cdr <- df_cdr %>% filter(desc == "high_confidence")
 df_methyl_binned <- fread(
     argv$input_methyl,
     header = FALSE,
-    select = c(1:5),
-    col.names = c("chr", "start", "end", "meth_prob", "index")
+    select = c(1:6),
+    col.names = c("chr", "start", "end", "meth_prob", "cov", "index")
 )
 # Adjust coordinates
 df_methyl_binned <- df_methyl_binned %>%
@@ -160,12 +156,6 @@ df_rm_out <- read_repeatmasker_bed(argv$input_rm) %>%
         end = end2 + start.y,
     )
 
-df_cov <- fread(
-    argv$input_coverage,
-    header = FALSE,
-    col.names = c("chr", "start", "cov")
-)
-
 # Make directory
 dir.create(argv$output_dir, showWarnings = FALSE)
 
@@ -173,7 +163,7 @@ dir.create(argv$output_dir, showWarnings = FALSE)
 # Plot bins
 for (chr_name in unique(df_methyl_binned$chr)) {
     plt_cov <- ggplot(
-        data = df_cov %>% filter(chr == chr_name),
+        data = df_methyl_binned %>% filter(chr == chr_name) %>% select(start, cov),
         aes(x = start, y = cov),
     ) +
     geom_area(position = "identity") +
