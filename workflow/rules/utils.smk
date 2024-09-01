@@ -23,5 +23,5 @@ rule add_target_bed_coords:
         awk -v OFS="\\t" '{{
             print $1, $2 + {params.col_add}, $3 + {params.col_add} {params.col_other}
         }}' | \
-        sort -k 2n -k 1 ;}} > {output} 2> {log}
+        sort -k 1,1 -k 2,2n;}} > {output} 2> {log}
         """
