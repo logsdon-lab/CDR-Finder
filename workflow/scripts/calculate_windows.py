@@ -167,15 +167,10 @@ def main() -> None:
 
     args = ap.parse_args()
 
-    # Dunno why you need an index but I'll keep it in.
-    for i, (chrom, start, stop, avg_meth, avg_cov) in enumerate(
-        average_methyl_freq_windows(
-            args.target_bed, args.methylation_tsv, args.processes, args.window_size
-        )
+    for chrom, start, stop, avg_meth, avg_cov in average_methyl_freq_windows(
+        args.target_bed, args.methylation_tsv, args.processes, args.window_size
     ):
-        args.binned_freq.write(
-            f"{chrom}\t{start}\t{stop}\t{avg_meth}\t{avg_cov}\t{i}\n"
-        )
+        args.binned_freq.write(f"{chrom}\t{start}\t{stop}\t{avg_meth}\t{avg_cov}\n")
 
 
 if __name__ == "__main__":

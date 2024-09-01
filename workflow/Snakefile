@@ -4,6 +4,9 @@ from os.path import join
 configfile: "config.yaml"
 
 
+include: "rules/utils.smk"
+
+
 containerized: "docker://logsdonlab/cdr-finder:latest"
 
 
@@ -191,6 +194,53 @@ rule format_filter_RM:
         """
 
 
+use rule add_target_bed_coords as add_target_bed_coords_rm_alr with:
+    input:
+        # 3-cols
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        # 5-cols
+        bed=rules.format_filter_RM.output.rm_alr_bed,
+    output:
+        bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR_adj.bed"),
+    log:
+        join(LOG_DIR, "add_target_bed_coords_rm_alr_{sample}.log"),
+    params:
+        col_st="$2",
+        col_end="$3",
+        col_add="$6",
+        col_other=",$4,$5",
+
+
+use rule add_target_bed_coords as add_target_bed_coords_rm with:
+    input:
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        bed=rules.format_filter_RM.output.rm_bed,
+    output:
+        bed=join(OUTPUT_DIR, "bed", "{sample}_rm_adj.bed"),
+    log:
+        join(LOG_DIR, "add_target_bed_coords_rm_{sample}.log"),
+    params:
+        col_st="$2",
+        col_end="$3",
+        col_add="$7",
+        col_other=",$4,$5,$6",
+
+
+use rule add_target_bed_coords as add_target_bed_coords_windows with:
+    input:
+        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        bed=rules.calc_windows.output,
+    output:
+        bed=join(OUTPUT_DIR, "bed", "{sample}_binned_freq_adj.bed"),
+    log:
+        join(LOG_DIR, "add_target_bed_coords_windows_{sample}.log"),
+    params:
+        col_st="$2",
+        col_end="$3",
+        col_add="$6",
+        col_other=",$4,$5",
+
+
 ###
 # Intersect RM: Merges repeatmasker bed file with 500bp slop, and only keeps those above the ALR Threshold
 #               Intersects merged ALR bed file with binned methylation frequency bedfile
@@ -199,8 +249,8 @@ rule format_filter_RM:
 
 rule intersect_RM:
     input:
-        repeat_masker=rules.format_filter_RM.output.rm_alr_bed,
-        binned_freq=rules.calc_windows.output.binned_freq,
+        repeat_masker=rules.add_target_bed_coords_rm_alr.output,
+        binned_freq=rules.add_target_bed_coords_windows.output,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
         merged=join(OUTPUT_DIR, "bed", "{sample}_rm_merged.bed"),
@@ -220,60 +270,46 @@ rule intersect_RM:
         """
         {{ bedtools merge -i {input.repeat_masker} -d 500 | \
         awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {output.merged} 2> {log}
-        bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed} 2> {log}
+        bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
         """
 
 
-###
-# in threshold: Evaluates bed file from intersected bed file and surrounding regions for signatures of CDR
-# Initial signature is mean methylation frequency below dynamically calculated threshold
-# Confidence is evaluated based on whether or not these low methylation frequency windows clear a size threshold
-# + have flanking peaks of high methylation
-###
-
-
-rule in_threshold:
+rule call_cdrs:
     input:
-        script=workflow.source_path("scripts/in_threshold.py"),
+        script=workflow.source_path("scripts/dip_finder.py"),
         intersect_bed=rules.intersect_RM.output.intersect_bed,
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
-        final_call=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),
-        windows_call=join(OUTPUT_DIR, "bed", "{sample}_windows_CDR.bed"),
+        cdrs=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),
     log:
-        join(LOG_DIR, "in_threshold_{sample}.log"),
+        join(LOG_DIR, "call_cdrs_{sample}.log"),
     benchmark:
-        join(BMK_DIR, "in_threshold_{sample}.tsv")
+        join(BMK_DIR, "call_cdrs_{sample}.tsv")
     resources:
         mem=8,
         hrs=1,
     params:
-        low_threshold=LOW_THRESHOLD,
-        report_threshold=REPORT_THRESHOLD,
-        edge_search=EDGE_SEARCH,
+        bp_merge=10_000,
+        thr_quantile_valley=0.1,
+        thr_prominence_perc_valley=0.5,
     conda:
         "envs/python.yaml"
     threads: 1
     shell:
         """
         python {input.script} \
-        --intersect_bed {input.intersect_bed} \
-        --target_bed {input.target_bed} \
-        --final_call {output.final_call} \
-        --windows_call {output.windows_call} \
-        --low_threshold {params.low_threshold} \
-        --report_threshold {params.report_threshold} \
-        --edge_search {params.edge_search} 2> {log}
+        -i {input.intersect_bed} \
+        --bp_merge {params.bp_merge} \
+        --thr_quantile_valley {params.thr_quantile_valley} \
+        --thr_prominence_perc_valley {params.thr_prominence_perc_valley} > {output} 2> {log}
         """
 
 
 rule plot_cdr:
     input:
         script=workflow.source_path("scripts/plot_cdr.R"),
-        binned_freq_bed=rules.calc_windows.output.binned_freq,
-        cdr_bed=rules.in_threshold.output.final_call,
-        rm_bed=rules.format_filter_RM.output.rm_bed,
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        binned_freq_bed=rules.add_target_bed_coords_windows.output,
+        cdr_bed=rules.call_cdrs.output,
+        rm_bed=rules.add_target_bed_coords_rm.output,
     output:
         directory(join(OUTPUT_DIR, "plot", "{sample}")),
     log:
@@ -290,7 +326,6 @@ rule plot_cdr:
         Rscript {input.script} \
         --input_methyl {input.binned_freq_bed} \
         --input_rm {input.rm_bed} \
-        --input_target_regions {input.target_bed} \
         --input_cdr {input.cdr_bed} \
         --output_dir {output} 2> {log}
         """
@@ -298,6 +333,6 @@ rule plot_cdr:
 
 rule all:
     input:
-        expand(rules.in_threshold.output, sample=MANIFEST.keys()),
+        expand(rules.call_cdrs.output, sample=MANIFEST.keys()),
         expand(rules.plot_cdr.output, sample=MANIFEST.keys()),
     default_target: True

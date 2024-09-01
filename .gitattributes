@@ -3,3 +3,8 @@ test/data/fa/CHM13_chr8_chr21.fa.gz filter=lfs diff=lfs merge=lfs -text
 test/calculate_windows/expected/expected_bin_freq.bed filter=lfs diff=lfs merge=lfs -text
 test/calculate_windows/expected/original_bin_freq.bed filter=lfs diff=lfs merge=lfs -text
 test/calculate_windows/input/CHM13_methyl.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/expected/HG00731_cdr_merged.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/expected/CHM13_cdr.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/expected/HG00731_cdr.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/input/CHM13_intersect.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/input/HG00731_intersect.bed filter=lfs diff=lfs merge=lfs -text

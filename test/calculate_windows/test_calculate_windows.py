@@ -29,7 +29,10 @@ def test_calculate_windows(
     exp_og_bed: str,
 ):
     with open(exp_bed) as fh, open(exp_og_bed) as ofh:
-        exp_regions = sorted(line.strip().split("\t") for line in fh.readlines())
+        exp_regions = sorted(
+            enumerate(line.strip().split("\t") for line in fh.readlines()),
+            key=lambda x: x[1],
+        )
         exp_og_regions = sorted(line.strip().split("\t") for line in ofh.readlines())
 
     # The command output equals the expected output.
@@ -46,10 +49,10 @@ def test_calculate_windows(
     )
 
     # The expected output equals the original output.
-    for exp_region, exp_og_region in zip(exp_regions, exp_og_regions):
-        *coords, freq, i = exp_region
+    for (i, exp_region), exp_og_region in zip(exp_regions, exp_og_regions):
+        *coords, freq, _ = exp_region
         *ecoords, efreq, ei = exp_og_region
         freq, efreq = float(freq), float(efreq)
-        assert i == ei and coords == ecoords
+        assert str(i) == ei and coords == ecoords
         # Allow some approximation for floating point.
         assert freq == pytest.approx(efreq, 0.5)

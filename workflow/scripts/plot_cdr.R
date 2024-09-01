@@ -109,52 +109,28 @@ p <- add_argument(
   help = "Input RepeatMasker annotations.", type = "character"
 )
 p <- add_argument(
-  p, "--input_target_regions",
-  help = "Input target regions.", type = "character"
-)
-p <- add_argument(
   p, "--output_dir",
   help = "Output directory of binned average methylation frequency plot PNG.", type = "character",
   default = "plot"
 )
 argv <- parse_args(p)
 
-df_target_regions <- fread(
-    argv$input_target_regions,
+df_cdr <- fread(
+    argv$input_cdr,
     header = FALSE,
     select = c(1:3),
     col.names = c("chr", "start", "end")
 )
-df_cdr <- fread(
-    argv$input_cdr,
-    header = FALSE,
-    select = c(1:4),
-    col.names = c("chr", "start", "end", "desc")
-)
-df_cdr <- df_cdr %>% filter(desc == "high_confidence")
 
 # Load binned freq file
 df_methyl_binned <- fread(
     argv$input_methyl,
     header = FALSE,
-    select = c(1:6),
-    col.names = c("chr", "start", "end", "meth_prob", "cov", "index")
+    select = c(1:5),
+    col.names = c("chr", "start", "end", "meth_prob", "cov")
 )
-# Adjust coordinates
-df_methyl_binned <- df_methyl_binned %>%
-    left_join(df_target_regions, join_by(chr)) %>%
-    mutate(
-        start = start.x + start.y,
-        end = end.x + start.y
-    )
 
-# Adjust coordinates
-df_rm_out <- read_repeatmasker_bed(argv$input_rm) %>%
-    left_join(df_target_regions, join_by(chr)) %>%
-    mutate(
-        start = start2 + start.y,
-        end = end2 + start.y,
-    )
+df_rm_out <- read_repeatmasker_bed(argv$input_rm)
 
 # Make directory
 dir.create(argv$output_dir, showWarnings = FALSE)
