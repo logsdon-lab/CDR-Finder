@@ -14,8 +14,9 @@ MANIFEST = config["samples"]
 WINDOW = config["window_size"]
 REPORT_THRESHOLD = config.get("report_threshold", 25000)
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
-EDGE_SEARCH = config.get("edge_search", 50000)
-LOW_THRESHOLD = config.get("low_threshold", 39)
+BP_MERGE = config.get("bp_merge")
+QUANTILE_THRESHOLD = config.get("quantile_valley_threshold", 0.1)
+PROM_THRESHOLD = config.get("prominence_perc_valley_threshold", 0.2)
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
@@ -288,9 +289,9 @@ rule call_cdrs:
         mem=8,
         hrs=1,
     params:
-        bp_merge=10_000,
-        thr_quantile_valley=0.1,
-        thr_prominence_perc_valley=0.5,
+        bp_merge=f"--bp_merge {BP_MERGE}" if BP_MERGE else "",
+        thr_quantile_valley=QUANTILE_THRESHOLD,
+        thr_prominence_perc_valley=PROM_THRESHOLD,
     conda:
         "envs/python.yaml"
     threads: 1
@@ -298,7 +299,7 @@ rule call_cdrs:
         """
         python {input.script} \
         -i {input.intersect_bed} \
-        --bp_merge {params.bp_merge} \
+        {params.bp_merge} \
         --thr_quantile_valley {params.thr_quantile_valley} \
         --thr_prominence_perc_valley {params.thr_prominence_perc_valley} > {output} 2> {log}
         """

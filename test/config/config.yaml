@@ -6,12 +6,15 @@ samples:
 
 # Size of the methylation windows to average over
 window_size: 5000
-# Minimum size of CDR to report
-report_threshold: 25000
+
 # Size of ALR repeat stretches to include in search of CDR
 alr_threshold: 100000
-# Distance to search on the edge of CDRs to ensure that methylation reaches max around
-edge_search: 50000
-# Threshold for mean percent methylation to clear in order for standard calling,
-## if below, it is assumed that this is the low end of the distribution and the windows will be taken based on what is 1/2 a standard deviation above the mean
-low_threshold: 39
+
+# Distance to merge adjacent CDRs. Can omit.
+bp_merge: 10000
+
+# Threshold quantile to filter low confidence CDRs. ex 0.1 allows valleys with average value less than the 10% percentile.
+quantile_valley_threshold: 0.1
+
+# Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
+prominence_perc_valley_threshold: 0.2
