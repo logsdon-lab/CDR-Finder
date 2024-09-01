@@ -3,7 +3,7 @@
 
 This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
 
-![](docs/CHM13_CDR.png)
+![](docs/chr8.png)
 
 Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 

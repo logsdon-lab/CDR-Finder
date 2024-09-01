@@ -276,7 +276,7 @@ rule intersect_RM:
 
 rule call_cdrs:
     input:
-        script=workflow.source_path("scripts/dip_finder.py"),
+        script=workflow.source_path("scripts/cdr_finder.py"),
         intersect_bed=rules.intersect_RM.output.intersect_bed,
     output:
         cdrs=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),

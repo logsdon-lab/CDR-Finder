@@ -156,7 +156,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
     plt_methyl <- ggplot() +
         geom_segment(
             data = df_cdr %>% filter(chr == chr_name),
-            aes(x = start, y = 125, xend = end, yend = 125),
+            aes(x = start, y = 130, xend = end, yend = 130),
         ) +
         geom_segment(
             data = df_rm_out %>% filter(chr == chr_name),
@@ -204,6 +204,10 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         plot_layout(
             ncol = 1,
             heights = unit(plt_ht_prop, c('null', 'null'))
+        ) +
+        plot_annotation(
+            title = chr_name,
+            theme = theme(plot.title = element_text(size = 18))
         ) &
         scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit="")) &
         xlab("Position (Mbp)")
