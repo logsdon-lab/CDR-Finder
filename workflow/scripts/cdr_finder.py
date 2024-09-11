@@ -43,7 +43,7 @@ def main():
     ap.add_argument(
         "--thr_prominence_perc_valley",
         type=float,
-        default=0.2,
+        default=0.33,
         help="Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.",
     )
 

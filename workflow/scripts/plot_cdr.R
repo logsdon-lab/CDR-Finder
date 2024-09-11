@@ -139,11 +139,20 @@ dir.create(argv$output_dir, showWarnings = FALSE)
 # Plot bins
 for (chr_name in unique(df_methyl_binned$chr)) {
     plt_cov <- ggplot(
-        data = df_methyl_binned %>% filter(chr == chr_name) %>% select(start, cov),
-        aes(x = start, y = cov),
+        data = df_methyl_binned %>%
+            filter(chr == chr_name) %>%
+            mutate(Methylated=(cov * (meth_prob / 100))) %>%
+            # Total cov as unmethylated. Only for plot since identity and everything overlapped.
+            mutate(Unmethylated=cov) %>%
+            select(start, Unmethylated, Methylated) %>%
+            pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
+            # Reorder coverage types.
+            mutate(Coverage = factor(Coverage, levels = c("Unmethylated", "Methylated"))),
+        aes(x = start, y = cov_cnt, fill=Coverage),
     ) +
     geom_area(position = "identity") +
-    ylab("Read Depth") +
+    ylab("Coverage") +
+    labs(fill = "Methylation") +
     theme_classic() +
     theme(
         axis.title.x =  element_blank(),
@@ -186,7 +195,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
                 ymax = 100,
             ),
             fill = "red",
-            alpha = 0.5
+            alpha = 0.33
         ) +
         scale_y_continuous(
             labels = unit_format(unit="%"),
