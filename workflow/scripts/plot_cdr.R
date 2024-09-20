@@ -113,6 +113,12 @@ p <- add_argument(
   help = "Output directory of binned average methylation frequency plot PNG.", type = "character",
   default = "plot"
 )
+p <- add_argument(
+  p, "--add_hbar",
+  help = "Add horizontal bar.",
+  flag = TRUE,
+  type = "logical"
+)
 argv <- parse_args(p)
 
 df_cdr <- fread(
@@ -138,30 +144,6 @@ dir.create(argv$output_dir, showWarnings = FALSE)
 # 1st coverage, 2nd chr, 3rd average methylation freq
 # Plot bins
 for (chr_name in unique(df_methyl_binned$chr)) {
-    plt_cov <- ggplot(
-        data = df_methyl_binned %>%
-            filter(chr == chr_name) %>%
-            mutate(Methylated=(cov * (meth_prob / 100))) %>%
-            # Total cov as unmethylated. Only for plot since identity and everything overlapped.
-            mutate(Unmethylated=cov) %>%
-            select(start, Unmethylated, Methylated) %>%
-            pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
-            # Reorder coverage types.
-            mutate(Coverage = factor(Coverage, levels = c("Unmethylated", "Methylated"))),
-        aes(x = start, y = cov_cnt, fill=Coverage),
-    ) +
-    geom_area(position = "identity") +
-    ylab("Coverage") +
-    labs(fill = "Methylation") +
-    theme_classic() +
-    theme(
-        axis.title.x =  element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
-        axis.line.x = element_blank(),
-        axis.line.y = element_blank(),
-    )
-
     plt_methyl <- ggplot() +
         geom_segment(
             data = df_cdr %>% filter(chr == chr_name),
@@ -184,19 +166,24 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             data = df_methyl_binned %>% filter(chr == chr_name),
             aes(x = start, y = as.numeric(meth_prob)),
             fill = "black",
-        ) +
-        # Annotate CDR with with red overlap rectangle and horizontal bar.
-        geom_rect(
-            data = df_cdr %>% filter(chr == chr_name),
-            aes(
-                xmin = start,
-                ymin = 0,
-                xmax = end,
-                ymax = 100,
-            ),
-            fill = "red",
-            alpha = 0.33
-        ) +
+        )
+
+    if (isTRUE(argv$add_hbar)) {
+        plt_methyl <- plt_methyl +
+            # Annotate CDR with with red overlap rectangle and horizontal bar.
+            geom_rect(
+                data = df_cdr %>% filter(chr == chr_name),
+                aes(
+                    xmin = start,
+                    ymin = 0,
+                    xmax = end,
+                    ymax = 100,
+                ),
+                fill = "red",
+                alpha = 0.33
+            )
+    }
+    plt_methyl <- plt_methyl +
         scale_y_continuous(
             labels = unit_format(unit="%"),
             breaks = seq(0, 100, by = 20)
@@ -204,12 +191,37 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         ylab("Average Methylation Percent") +
         theme_classic() +
         theme(
+            axis.title.x =  element_blank(),
+            axis.text.x = element_blank(),
+            axis.ticks.x = element_blank(),
             axis.line.x = element_blank(),
             axis.line.y = element_blank(),
         )
 
-    plt_ht_prop <- c(1.5, 3)
-    plt_final <- plt_cov / plt_methyl +
+    plt_cov <- ggplot(
+        data = df_methyl_binned %>%
+            filter(chr == chr_name) %>%
+            mutate(Methylated=(cov * (meth_prob / 100))) %>%
+            # Total cov as unmethylated. Only for plot since identity and everything overlapped.
+            mutate(Unmethylated=cov) %>%
+            select(start, Unmethylated, Methylated) %>%
+            pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
+            # Reorder coverage types.
+            mutate(Coverage = factor(Coverage, levels = c("Unmethylated", "Methylated"))),
+        aes(x = start, y = cov_cnt, fill=Coverage),
+    ) +
+    geom_area(position = "identity") +
+    ylab("Coverage") +
+    labs(fill = "Methylation") +
+    scale_fill_manual(values=c("Methylated" = "#FF474C", "Unmethylated" = "#57b9ff")) +
+    theme_classic() +
+    theme(
+        axis.line.x = element_blank(),
+        axis.line.y = element_blank(),
+    )
+
+    plt_ht_prop <- c(3, 1.5)
+    plt_final <- plt_methyl / plt_cov +
         plot_layout(
             ncol = 1,
             heights = unit(plt_ht_prop, c('null', 'null'))

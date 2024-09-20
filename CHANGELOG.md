@@ -3,9 +3,9 @@
 * Added plot cdr R script.
 * Added output, log, and benchmark dir.
 * Remove singularity for rules.
-* Rewrote calculate_windows.py as unbearably slow.
-    * Use intervaltrees for faster overlap detection.
-    * Remove pandas and numpy.
+* Rewrote `calculate_windows.py` as unbearably slow.
+    * Use `intervaltree` library for faster overlap detection.
+    * Remove `pandas` and `numpy`.
     * Remove slide argument as unnecessary and leads to undefined behavior
 
     ```bash
@@ -25,3 +25,15 @@
     user    22m34.406s
     sys     0m21.116s
     ```
+* Use `modkit` instead of `modbam2bed`.
+    * `modkit` produces identical results and is actively supported by ONT.
+* Rework CDR detection script to not use custom valley detection algorithm and rely on pre-existing well-tested libraries. Using the [`scipy.signals`](https://docs.scipy.org/doc/scipy/reference/signal.html) library, we can achieve similar results out of the box.
+    * Remove confidence.
+    * Changed parameters so more robust thresholds. Rather than `low_threshold` of `39`, two thresholds were added:
+        * `thr_quantile_valley`
+            * Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
+            * *How rare should this valley be compared to all valleys?*
+        * `thr_prominence_perc_valley`
+            * Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
+            * See https://en.wikipedia.org/wiki/Topographic_prominence.
+            * *How deep should this valley be in the context of the max methylation in this region?*

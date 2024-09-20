@@ -26,12 +26,6 @@ def main():
         help="CDR regions as 3-column bedfile.",
     )
     ap.add_argument(
-        "--window_median_filt",
-        type=int,
-        default=None,
-        help="Window in number of rows to apply median filter to denoise.",
-    )
-    ap.add_argument(
         "--bp_merge", type=int, default=None, help="Base pairs to merge CDRs."
     )
     ap.add_argument(
@@ -75,14 +69,11 @@ def main():
         thr_valley_prom = df_chr_methyl["avg"].max() * args.thr_prominence_perc_valley
         thr_valley_quantile = df_chr_methyl["avg"].quantile(args.thr_quantile_valley)
 
-        # Per group apply optionally apply a median filter to denoise.
-        # And find peaks within the signal.
+        # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
             df_chr_methyl_adj_grp = df_chr_methyl_adj_grp.with_row_index()
 
             methyl_signal = df_chr_methyl_adj_grp["avg"]
-            if args.window_median_filt:
-                methyl_signal = signal.medfilt(methyl_signal, args.window_median_filt)
 
             # Require valley has prominence of some percentage of max methyl signal.
             # Invert for peaks.
@@ -110,7 +101,7 @@ def main():
                     pl.col("index") == math.floor(cdr_st_idx)
                 ).row(0, named=True)["st"]
                 cdr_end = df_chr_methyl_adj_grp.filter(
-                    pl.col("index") == math.floor(cdr_end_idx)
+                    pl.col("index") == math.ceil(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
                 if args.bp_merge:
@@ -126,7 +117,8 @@ def main():
             starting_intervals = len(cdrs)
             cdrs.merge_overlaps()
             print(
-                f"Merged {starting_intervals - len(cdrs)} intervals.", file=sys.stderr
+                f"Merged {starting_intervals - len(cdrs)} intervals in {chrom}.",
+                file=sys.stderr,
             )
 
         for cdr in cdrs.iter():

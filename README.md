@@ -1,23 +1,23 @@
 # CDR-Finder
 [![CI](https://github.com/koisland/CDR-Finder/actions/workflows/main.yaml/badge.svg)](https://github.com/koisland/CDR-Finder/actions/workflows/main.yaml)
 
-This repository contains a snakemake to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
+This repository contains a Snakemake workflow to identify and quantify hypomethylated regions within centromeres, or Centromere Dip Regions (CDRs; Altemose et al., Science, 2022).
 
 ![](docs/chr8.png)
 
 Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 
-Adapted and distributed by @fkmastrorosa and @wharvey31
+Adapted and distributed by @fkmastrorosa, @wharvey31, and @koisland.
 
 This is done by:
 - Extracting the sequence of interest
 - Intersect the sequence with its methylation data
 - Bin the region of interest into 5 kbp windows and calculate their mean methylation percentage
-- Run RepeatMasker on the sequence of interest to identify regions containing Alpha-satellite (ALR/Alpha)
-- For each Alpha-satellite containing region, it identifies bins with a lower methylation percentage than the avearge of the region
-- Merge consecutive bins
-- Checks if flanking bins with greater than maximum methylation percentage (defined as within 1 standard deviation from the maximum)
-- Checks if the CDR calls are smaller than a user-specified threshold
+- Run RepeatMasker on the sequence of interest to identify regions containing alpha-satellite repeats (ALR/Alpha)
+- For each alpha-satellite containing region:
+    * Merge consecutive bins.
+    * Detect valleys in average methylation percentage.
+    * Optionally, merge adjacent detected CDRs.
 
 
 ## Getting Started
@@ -78,6 +78,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 - `bamfile`
     * Alignment BAM file with methylation tags.
     * Requires aligned reads with the Mm and Ml tags (MM and ML also supported), and the reference sequence used for alignment.
+    * PacBio data requires that the alignment does not hard-clip supplementary alignment using `pbmm2` or -Y flag for `minimap2`/`winnowmap`.
     * https://github.com/epi2me-labs/modbam2bed?tab=readme-ov-file#usage
 - `regions`
     * BED file of target region coordinates.
@@ -95,10 +96,10 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |parameter|description|default|
 |-|-|-|
 |`window_size`|Size of the methylation windows to average over.|5000|
-|`report_threshold`|Minimum size of CDR to report.|25000|
-|`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100000|
-|`edge_search`| Distance to search on the edge of CDRs to ensure that methylation reaches max around.|50000|
-|`low_threshold`|Threshold for mean percent methylation to clear in order for standard calling. If below, it is assumed that this is the low end of the distribution and the windows will be taken based on what is 1/2 a standard deviation above the mean.|39|
+|`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100,000|
+|`bp_merge`| Distance in bases to merge adjacent CDRs. Can be omitted.|1|
+|`quantile_valley_threshold`|Threshold quantile to filter low confidence CDRs. Smaller values filter for more valleys with lower methyl percents.|0.1|
+|`prominence_perc_valley_threshold`|Threshold percent of the maximum methylation percentage as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley to filter low confidence CDRs. Larger values filter for deeper valleys.|0.33|
 
 ## Testing
 Set up conda environment.
@@ -108,7 +109,7 @@ conda env create --name test_cdr_finder -f env_dev.yaml
 
 To run the test case on chr8 and chr21.
 ```bash
-snakemake -c 1 -p --sdm conda test/config/config.yaml
+snakemake -c 1 -p --sdm conda --configfile test/config/config.yaml
 ```
 
 To run integration tests.

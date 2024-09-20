@@ -14,7 +14,7 @@ MANIFEST = config["samples"]
 WINDOW = config["window_size"]
 REPORT_THRESHOLD = config.get("report_threshold", 25000)
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
-BP_MERGE = config.get("bp_merge")
+BP_MERGE = config.get("bp_merge", 1)
 MEDIAN_FILT_WINDOW = config.get("window_median_filt")
 QUANTILE_THRESHOLD = config.get("quantile_valley_threshold", 0.1)
 PROM_THRESHOLD = config.get("prominence_perc_valley_threshold", 0.2)
@@ -332,7 +332,8 @@ rule plot_cdr:
         --input_methyl {input.binned_freq_bed} \
         --input_rm {input.rm_bed} \
         --input_cdr {input.cdr_bed} \
-        --output_dir {output} 2> {log}
+        --output_dir {output} \
+        --add_hbar 2> {log}
         """
 
 
