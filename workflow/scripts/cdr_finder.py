@@ -29,16 +29,16 @@ def main():
         "--bp_merge", type=int, default=None, help="Base pairs to merge CDRs."
     )
     ap.add_argument(
-        "--thr_quantile_valley",
+        "--thr_height_perc_valley",
         type=float,
-        default=0.1,
-        help="Threshold quantile to filter low confidence CDRs. ex 0.1 allows valleys with average value less than the 10% percentile.",
+        default=0.15,
+        help="Threshold percent of the median methylation percentage needed as the minimal height/prominence of a valley from the median. Larger values filter for deeper valleys.",
     )
     ap.add_argument(
-        "--thr_prominence_perc_valley",
+        "--thr_prom_perc_valley",
         type=float,
-        default=0.33,
-        help="Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.",
+        default=0.3,
+        help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for deeper valleys and remove smaller valleys at edges.",
     )
 
     args = ap.parse_args()
@@ -66,36 +66,23 @@ def main():
             )
             .partition_by("brk")
         )
-        thr_valley_prom = df_chr_methyl["avg"].max() * args.thr_prominence_perc_valley
-        thr_valley_quantile = df_chr_methyl["avg"].quantile(args.thr_quantile_valley)
+
+        thr_valley_prom = df_chr_methyl["avg"].median() * args.thr_prom_perc_valley
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
             df_chr_methyl_adj_grp = df_chr_methyl_adj_grp.with_row_index()
 
-            methyl_signal = df_chr_methyl_adj_grp["avg"]
-
-            # Require valley has prominence of some percentage of max methyl signal.
+            # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
-            peaks, peak_info = signal.find_peaks(
-                -methyl_signal, width=1, prominence=thr_valley_prom
+            _, peak_info = signal.find_peaks(
+                -df_chr_methyl_adj_grp["avg"], width=1, prominence=thr_valley_prom
             )
 
-            df_filtered_regions = (
-                df_chr_methyl_adj_grp.filter(pl.col("index").is_in(peaks))
-                .rename({"index": "index_original"})
-                .with_row_index()
-                # Filter peaks less than desired quantile.
-                .filter(pl.col("avg") < thr_valley_quantile)
-            )
-            filtered_region_idxs = set(df_filtered_regions["index"])
-
+            grp_cdr_intervals = []
             for i, (cdr_st_idx, cdr_end_idx) in enumerate(
                 zip(peak_info["left_ips"], peak_info["right_ips"])
             ):
-                if i not in filtered_region_idxs:
-                    continue
-
                 # Convert approx indices to indices
                 cdr_st = df_chr_methyl_adj_grp.filter(
                     pl.col("index") == math.floor(cdr_st_idx)
@@ -104,12 +91,40 @@ def main():
                     pl.col("index") == math.ceil(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
+                # Add merge distance bp.
+                grp_cdr_intervals.append(
+                    Interval(cdr_st, cdr_end, -peak_info["width_heights"][i])
+                )
+
+            # Calculate median of group removing valleys
+            exprs_valley_intervals = [
+                (pl.col("st") >= i.begin) & (pl.col("end") <= i.end)
+                for i in grp_cdr_intervals
+            ]
+            try:
+                median_noncdr = (
+                    df_chr_methyl_adj_grp.filter(
+                        ~pl.any_horizontal(exprs_valley_intervals)
+                    )
+                    .get_column("avg")
+                    .median()
+                )
+                cdr_height_thr = median_noncdr * args.thr_height_perc_valley
+            except Exception:
+                # No CDRs in this region.
+                continue
+
+            for interval in grp_cdr_intervals:
+                cdr_st, cdr_end, cdr_low = interval.begin, interval.end, interval.data
+                # Calculate the height of this CDR from the median.
+                cdr_height_from_median = max(0, median_noncdr - cdr_low)
+
                 if args.bp_merge:
                     cdr_st = cdr_st - args.bp_merge
                     cdr_end = cdr_end + args.bp_merge
 
-                # Add merge distance bp.
-                cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
+                if cdr_height_from_median >= cdr_height_thr:
+                    cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
     for chrom, cdrs in cdr_intervals.items():

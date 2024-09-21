@@ -86,7 +86,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 ## Output
 - `cdr_bed`
     * CDR regions.
-    * Based on the mean methylation frequency across the region, identifies and bins regions into `config.window_size` with methylation frequency below mean spanning `config.report_threshold`.
+    * Based on the median methylation frequency across the region, identifies and bins regions into `config.window_size` with methylation frequency below median spanning `config.report_threshold`.
     * `{config.output_dir}/bed/{sample}_CDR.bed`
 - `cdr_plot`
     * CDR regions plotted with RepeatMasker annotations.
@@ -98,8 +98,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |`window_size`|Size of the methylation windows to average over.|5000|
 |`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100,000|
 |`bp_merge`| Distance in bases to merge adjacent CDRs. Can be omitted.|1|
-|`quantile_valley_threshold`|Threshold quantile to filter low confidence CDRs. Smaller values filter for more valleys with lower methyl percents.|0.1|
-|`prominence_perc_valley_threshold`|Threshold percent of the maximum methylation percentage as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley to filter low confidence CDRs. Larger values filter for deeper valleys.|0.33|
+|`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.2|
 
 ## Testing
 Set up conda environment.

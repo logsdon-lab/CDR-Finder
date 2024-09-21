@@ -29,11 +29,10 @@
     * `modkit` produces identical results and is actively supported by ONT.
 * Rework CDR detection script to not use custom valley detection algorithm and rely on pre-existing well-tested libraries. Using the [`scipy.signals`](https://docs.scipy.org/doc/scipy/reference/signal.html) library, we can achieve similar results out of the box.
     * Remove confidence.
-    * Changed parameters so more robust thresholds. Rather than `low_threshold` of `39`, two thresholds were added:
-        * `thr_quantile_valley`
-            * Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
-            * *How rare should this valley be compared to all valleys?*
-        * `thr_prominence_perc_valley`
-            * Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
+    * Changed parameters so more robust thresholds. Rather than `low_threshold` of `39`, the only param is:
+        * `thr_height_perc_valley`
+            * Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
+            * ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
+            * *How deep should this valley be in the context of the median methylation in this region?*
+        * Also, use prominence of a valley which helps in removing low-confidence CDRs.
             * See https://en.wikipedia.org/wiki/Topographic_prominence.
-            * *How deep should this valley be in the context of the max methylation in this region?*

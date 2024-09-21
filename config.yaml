@@ -13,8 +13,6 @@ alr_threshold: 100000
 # Distance to merge adjacent CDRs. Can omit.
 bp_merge: 1
 
-# Threshold quantile to filter low confidence CDRs. ex 0.1 allows valleys with average value less than the 10% percentile.
-quantile_valley_threshold: 0.1
-
-# Threshold percent of the maximum methylation percentage as the minimal prominence of a valley to filter low confidence CDRs.
-prominence_perc_valley_threshold: 0.33
+# Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
+# ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
+height_perc_valley_threshold: 0.2
