@@ -15,7 +15,8 @@ WINDOW = config["window_size"]
 REPORT_THRESHOLD = config.get("report_threshold", 25000)
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 BP_MERGE = config.get("bp_merge", 1)
-HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.1)
+HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.2)
+PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
@@ -289,6 +290,9 @@ rule call_cdrs:
         hrs=1,
     params:
         bp_merge=f"--bp_merge {BP_MERGE}" if BP_MERGE else "",
+        thr_prom_perc_valley=f"--thr_prom_perc_valley {PROM_THRESHOLD}"
+        if PROM_THRESHOLD
+        else "",
         thr_height_perc_valley=HEIGHT_THRESHOLD,
     conda:
         "envs/python.yaml"
@@ -298,7 +302,7 @@ rule call_cdrs:
         python {input.script} \
         -i {input.intersect_bed} \
         --thr_height_perc_valley {params.thr_height_perc_valley} \
-        {params.bp_merge} > {output} 2> {log}
+        {params.bp_merge} {params.thr_prom_perc_valley} > {output} 2> {log}
         """
 
 
