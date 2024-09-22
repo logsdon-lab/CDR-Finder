@@ -82,6 +82,10 @@ def main():
             else None
         )
         cdr_height_thr = df_chr_methyl["avg"].median() * args.thr_height_perc_valley
+        print(
+            f"Using CDR height threshold of {cdr_height_thr} and prominence threshold of {cdr_prom_thr} for {chrom}.",
+            file=sys.stderr,
+        )
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
@@ -94,8 +98,8 @@ def main():
             )
 
             grp_cdr_intervals = []
-            for cdr_st_idx, cdr_end_idx in zip(
-                peak_info["left_ips"], peak_info["right_ips"]
+            for cdr_st_idx, cdr_end_idx, cdr_prom in zip(
+                peak_info["left_ips"], peak_info["right_ips"], peak_info["prominences"]
             ):
                 # Convert approx indices to indices
                 cdr_st = df_chr_methyl_adj_grp.filter(
@@ -105,10 +109,10 @@ def main():
                     pl.col("index") == math.ceil(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
-                grp_cdr_intervals.append(Interval(cdr_st, cdr_end))
+                grp_cdr_intervals.append(Interval(cdr_st, cdr_end, cdr_prom))
 
             for interval in grp_cdr_intervals:
-                cdr_st, cdr_end = interval.begin, interval.end
+                cdr_st, cdr_end, cdr_prom = interval.begin, interval.end, interval.data
 
                 # Get left and right side of CDR.
                 df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
@@ -122,7 +126,7 @@ def main():
                 cdr_low = df_cdr["avg"].min()
                 cdr_right_max = df_cdr_right["avg"].max()
                 cdr_left_max = df_cdr_left["avg"].max()
-                cdr_edge_height = max(
+                cdr_edge_height = min(
                     cdr_right_max if cdr_right_max else 0,
                     cdr_left_max if cdr_left_max else 0,
                 )
@@ -136,6 +140,10 @@ def main():
                     cdr_end = cdr_end + args.bp_merge
 
                 if cdr_height >= cdr_height_thr:
+                    print(
+                        f"Found CDR at {chrom}:{interval.begin}-{interval.end} with height of {cdr_height} and prominence {cdr_prom}.",
+                        file=sys.stderr,
+                    )
                     cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
