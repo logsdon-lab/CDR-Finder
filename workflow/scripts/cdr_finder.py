@@ -41,7 +41,7 @@ def main():
     ap.add_argument(
         "--thr_prom_perc_valley",
         type=float,
-        default=0.5,
+        default=None,
         help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for prominent valleys.",
     )
     ap.add_argument(
