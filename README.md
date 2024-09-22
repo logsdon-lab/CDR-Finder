@@ -99,7 +99,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100,000|
 |`bp_merge`| Distance in bases to merge adjacent CDRs. Can be omitted.|1|
 |`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.5|
-|`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs at the edges.|0.5|
+|`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs at the edges.|None|
 
 ## Testing
 Set up conda environment.
