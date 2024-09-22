@@ -15,6 +15,7 @@ WINDOW = config["window_size"]
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 BP_MERGE = config.get("bp_merge", 1)
 BP_EDGE = config.get("bp_edge", WINDOW)
+BP_ALR_MERGE = config.get("bp_alr_edge", 500)
 HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.5)
 PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.5)
 OUTPUT_DIR = config.get("output_dir", "results")
@@ -264,13 +265,13 @@ rule intersect_RM:
         hrs=1,
     params:
         alr_threshold=ALR_THRESHOLD,
-        window=WINDOW,
+        bp_alr_merge=BP_ALR_MERGE,
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
-        {{ bedtools merge -i {input.repeat_masker} -d {params.window} | \
+        {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
         awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {output.merged} 2> {log}
         bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
         """
