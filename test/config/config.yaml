@@ -15,4 +15,4 @@ bp_merge: 10000
 
 # Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
 # ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
-height_perc_valley_threshold: 0.2
+height_perc_valley_threshold: 0.5

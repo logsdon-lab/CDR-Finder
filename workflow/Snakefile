@@ -12,11 +12,11 @@ containerized: "docker://logsdonlab/cdr-finder:latest"
 
 MANIFEST = config["samples"]
 WINDOW = config["window_size"]
-REPORT_THRESHOLD = config.get("report_threshold", 25000)
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 BP_MERGE = config.get("bp_merge", 1)
-HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.2)
-PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
+BP_EDGE = config.get("bp_edge", WINDOW)
+HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.5)
+PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.5)
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
@@ -264,12 +264,13 @@ rule intersect_RM:
         hrs=1,
     params:
         alr_threshold=ALR_THRESHOLD,
+        window=WINDOW,
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
-        {{ bedtools merge -i {input.repeat_masker} -d 500 | \
+        {{ bedtools merge -i {input.repeat_masker} -d {params.window} | \
         awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {output.merged} 2> {log}
         bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
         """
@@ -290,9 +291,10 @@ rule call_cdrs:
         hrs=1,
     params:
         bp_merge=f"--bp_merge {BP_MERGE}" if BP_MERGE else "",
-        thr_prom_perc_valley=f"--thr_prom_perc_valley {PROM_THRESHOLD}"
-        if PROM_THRESHOLD
-        else "",
+        bp_edge=BP_EDGE,
+        thr_prom_perc_valley=(
+            f"--thr_prom_perc_valley {PROM_THRESHOLD}" if PROM_THRESHOLD else ""
+        ),
         thr_height_perc_valley=HEIGHT_THRESHOLD,
     conda:
         "envs/python.yaml"
@@ -302,6 +304,7 @@ rule call_cdrs:
         python {input.script} \
         -i {input.intersect_bed} \
         --thr_height_perc_valley {params.thr_height_perc_valley} \
+        --bp_edge {params.bp_edge} \
         {params.bp_merge} {params.thr_prom_perc_valley} > {output} 2> {log}
         """
 

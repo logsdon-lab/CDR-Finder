@@ -8,6 +8,10 @@ from scipy import signal
 from intervaltree import Interval, IntervalTree
 
 
+def get_interval(df: pl.DataFrame, interval: Interval):
+    return df.filter((pl.col("st") >= interval.begin) & (pl.col("end") <= interval.end))
+
+
 def main():
     ap = argparse.ArgumentParser(description="CDR finder.")
     ap.add_argument(
@@ -31,14 +35,20 @@ def main():
     ap.add_argument(
         "--thr_height_perc_valley",
         type=float,
-        default=0.2,
+        default=0.5,
         help="Threshold percent of the median methylation percentage needed as the minimal height/prominence of a valley from the median. Larger values filter for deeper valleys.",
     )
     ap.add_argument(
         "--thr_prom_perc_valley",
         type=float,
-        default=0.3,
-        help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for deeper valleys and remove smaller valleys at edges.",
+        default=0.5,
+        help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for prominent valleys.",
+    )
+    ap.add_argument(
+        "--bp_edge",
+        type=int,
+        default=5_000,
+        help="Bases to look on both edges of cdr to determine effective height.",
     )
 
     args = ap.parse_args()
@@ -66,8 +76,12 @@ def main():
             )
             .partition_by("brk")
         )
-
-        thr_valley_prom = df_chr_methyl["avg"].median() * args.thr_prom_perc_valley
+        cdr_prom_thr = (
+            df_chr_methyl["avg"].median() * args.thr_prom_perc_valley
+            if args.thr_prom_perc_valley
+            else None
+        )
+        cdr_height_thr = df_chr_methyl["avg"].median() * args.thr_height_perc_valley
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
@@ -76,12 +90,12 @@ def main():
             # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
             _, peak_info = signal.find_peaks(
-                -df_chr_methyl_adj_grp["avg"], width=1, prominence=thr_valley_prom
+                -df_chr_methyl_adj_grp["avg"], width=1, prominence=cdr_prom_thr
             )
 
             grp_cdr_intervals = []
-            for i, (cdr_st_idx, cdr_end_idx) in enumerate(
-                zip(peak_info["left_ips"], peak_info["right_ips"])
+            for cdr_st_idx, cdr_end_idx in zip(
+                peak_info["left_ips"], peak_info["right_ips"]
             ):
                 # Convert approx indices to indices
                 cdr_st = df_chr_methyl_adj_grp.filter(
@@ -91,39 +105,37 @@ def main():
                     pl.col("index") == math.ceil(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
-                # Add merge distance bp.
-                grp_cdr_intervals.append(
-                    Interval(cdr_st, cdr_end, -peak_info["width_heights"][i])
-                )
-
-            # Calculate median of group removing valleys
-            exprs_valley_intervals = [
-                (pl.col("st") >= i.begin) & (pl.col("end") <= i.end)
-                for i in grp_cdr_intervals
-            ]
-            try:
-                median_noncdr = (
-                    df_chr_methyl_adj_grp.filter(
-                        ~pl.any_horizontal(exprs_valley_intervals)
-                    )
-                    .get_column("avg")
-                    .median()
-                )
-                cdr_height_thr = median_noncdr * args.thr_height_perc_valley
-            except Exception:
-                # No CDRs in this region.
-                continue
+                grp_cdr_intervals.append(Interval(cdr_st, cdr_end))
 
             for interval in grp_cdr_intervals:
-                cdr_st, cdr_end, cdr_low = interval.begin, interval.end, interval.data
-                # Calculate the height of this CDR from the median.
-                cdr_height_from_median = max(0, median_noncdr - cdr_low)
+                cdr_st, cdr_end = interval.begin, interval.end
 
+                # Get left and right side of CDR.
+                df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
+                df_cdr_left = get_interval(
+                    df_chr_methyl_adj_grp, Interval(cdr_st - args.bp_edge, cdr_st)
+                )
+                df_cdr_right = get_interval(
+                    df_chr_methyl_adj_grp, Interval(cdr_end, cdr_end + args.bp_edge)
+                )
+
+                cdr_low = df_cdr["avg"].min()
+                cdr_right_max = df_cdr_right["avg"].max()
+                cdr_left_max = df_cdr_left["avg"].max()
+                cdr_edge_height = max(
+                    cdr_right_max if cdr_right_max else 0,
+                    cdr_left_max if cdr_left_max else 0,
+                )
+
+                # Calculate the height of this CDR looking at edges.
+                cdr_height = max(0, cdr_edge_height - cdr_low)
+
+                # Add merge distance bp.
                 if args.bp_merge:
                     cdr_st = cdr_st - args.bp_merge
                     cdr_end = cdr_end + args.bp_merge
 
-                if cdr_height_from_median >= cdr_height_thr:
+                if cdr_height >= cdr_height_thr:
                     cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
