@@ -16,7 +16,7 @@ This is done by:
 - Run RepeatMasker on the sequence of interest to identify regions containing alpha-satellite repeats (ALR/Alpha)
 - For each alpha-satellite containing region:
     * Merge consecutive bins.
-    * Detect valleys in average methylation percentage.
+    * Detect valleys in average methylation percentage based on relative height and prominence.
     * Optionally, merge adjacent detected CDRs.
 
 
@@ -86,7 +86,6 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 ## Output
 - `cdr_bed`
     * CDR regions.
-    * Based on the median methylation frequency across the region, identifies and bins regions into `config.window_size` with methylation frequency below median spanning `config.report_threshold`.
     * `{config.output_dir}/bed/{sample}_CDR.bed`
 - `cdr_plot`
     * CDR regions plotted with RepeatMasker annotations.
@@ -97,9 +96,11 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |-|-|-|
 |`window_size`|Size of the methylation windows to average over.|5000|
 |`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100,000|
-|`bp_merge`| Distance in bases to merge adjacent CDRs. Can be omitted.|1|
+|`bp_merge`|Distance in bases to merge adjacent CDRs. Can be omitted.|1|
+|`bp_alr_merge`|Distance in bases to merge adjacent alpha-satellite regions.|1,000|
+|`bp_edge`|Distance in bases to check CDR edges. Used to determine height of dip. Large values give better estimates of true height.|500,000|
 |`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.5|
-|`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs at the edges.|None|
+|`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs.|0.5|
 
 ## Testing
 Set up conda environment.

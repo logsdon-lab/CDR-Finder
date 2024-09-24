@@ -2,14 +2,36 @@ import sys
 import math
 import argparse
 from collections import defaultdict
+from typing import Iterable
 
 import polars as pl
 from scipy import signal
 from intervaltree import Interval, IntervalTree
 
 
-def get_interval(df: pl.DataFrame, interval: Interval):
-    return df.filter((pl.col("st") >= interval.begin) & (pl.col("end") <= interval.end))
+def get_interval(
+    df: pl.DataFrame,
+    interval: Interval,
+    ignore_intervals: Iterable[Interval] | None = None,
+) -> pl.DataFrame:
+    df_res = df.filter(
+        (pl.col("st") >= interval.begin) & (pl.col("end") <= interval.end)
+    )
+    if ignore_intervals:
+        df_res = df_res.with_columns(
+            ignore=pl.when(
+                pl.any_horizontal(
+                    (pl.col("st") >= interval.begin) & (pl.col("end") <= interval.end)
+                    for interval in ignore_intervals
+                )
+            )
+            .then(pl.lit(True))
+            .otherwise(pl.lit(False))
+        )
+    else:
+        df_res = df_res.with_columns(ignore=pl.lit(False))
+
+    return df_res
 
 
 def main():
@@ -97,7 +119,7 @@ def main():
                 -df_chr_methyl_adj_grp["avg"], width=1, prominence=cdr_prom_thr
             )
 
-            grp_cdr_intervals = []
+            grp_cdr_intervals: set[Interval] = set()
             for cdr_st_idx, cdr_end_idx, cdr_prom in zip(
                 peak_info["left_ips"], peak_info["right_ips"], peak_info["prominences"]
             ):
@@ -109,30 +131,45 @@ def main():
                     pl.col("index") == math.ceil(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
-                grp_cdr_intervals.append(Interval(cdr_st, cdr_end, cdr_prom))
+                grp_cdr_intervals.add(Interval(cdr_st, cdr_end, cdr_prom))
 
             for interval in grp_cdr_intervals:
                 cdr_st, cdr_end, cdr_prom = interval.begin, interval.end, interval.data
+                ignore_intervals = grp_cdr_intervals.difference([interval])
+                df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
+
+                interval_cdr_left = Interval(cdr_st - args.bp_edge, cdr_st)
+                interval_cdr_right = Interval(cdr_end, cdr_end + args.bp_edge)
 
                 # Get left and right side of CDR.
-                df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
+                # Subtract intervals if overlapping bp edge region.
+                # Set ignored intervals on sides of CDR to average methylation median.
+                # This does not affect other calls and is just to look at valley in isolation.
                 df_cdr_left = get_interval(
-                    df_chr_methyl_adj_grp, Interval(cdr_st - args.bp_edge, cdr_st)
+                    df_chr_methyl_adj_grp, interval_cdr_left, ignore_intervals
+                ).with_columns(
+                    avg=pl.when(pl.col("ignore"))
+                    .then(df_chr_methyl["avg"].median())
+                    .otherwise(pl.col("avg"))
                 )
                 df_cdr_right = get_interval(
-                    df_chr_methyl_adj_grp, Interval(cdr_end, cdr_end + args.bp_edge)
+                    df_chr_methyl_adj_grp, interval_cdr_right, ignore_intervals
+                ).with_columns(
+                    avg=pl.when(pl.col("ignore"))
+                    .then(df_chr_methyl["avg"].median())
+                    .otherwise(pl.col("avg"))
                 )
 
                 cdr_low = df_cdr["avg"].min()
-                cdr_right_max = df_cdr_right["avg"].max()
-                cdr_left_max = df_cdr_left["avg"].max()
+                cdr_right_median = df_cdr_right["avg"].median()
+                cdr_left_median = df_cdr_left["avg"].median()
                 cdr_edge_height = min(
-                    cdr_right_max if cdr_right_max else 0,
-                    cdr_left_max if cdr_left_max else 0,
+                    cdr_right_median if cdr_right_median else 0,
+                    cdr_left_median if cdr_left_median else 0,
                 )
 
                 # Calculate the height of this CDR looking at edges.
-                cdr_height = max(0, cdr_edge_height - cdr_low)
+                cdr_height = cdr_edge_height - cdr_low
 
                 # Add merge distance bp.
                 if args.bp_merge:
