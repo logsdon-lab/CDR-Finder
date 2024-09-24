@@ -163,9 +163,14 @@ def main():
                 cdr_low = df_cdr["avg"].min()
                 cdr_right_median = df_cdr_right["avg"].median()
                 cdr_left_median = df_cdr_left["avg"].median()
+                # If empty, use median.
                 cdr_edge_height = min(
-                    cdr_right_median if cdr_right_median else 0,
-                    cdr_left_median if cdr_left_median else 0,
+                    cdr_right_median
+                    if cdr_right_median
+                    else df_chr_methyl_adj_grp["avg"].median(),
+                    cdr_left_median
+                    if cdr_left_median
+                    else df_chr_methyl_adj_grp["avg"].median(),
                 )
 
                 # Calculate the height of this CDR looking at edges.
