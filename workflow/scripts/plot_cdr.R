@@ -64,6 +64,27 @@ reformat_repeatmasker_bed <- function(df) {
     df_intermediate$start2[mask] <- df_intermediate$end[mask]
     df_intermediate$end2[mask] <- df_intermediate$start[mask]
 
+    df_intermediate <- df_intermediate %>%
+        mutate(
+            rClass=case_when(
+                rClass == "ALR/Alpha" ~ "Alpha Satellite",
+                rClass %in% c("HSat1A", "HSat1B", "HSat2", "HSat3") ~ "Human Satellite",
+                .default = "Other Satellite"
+            )
+        )
+    # Add unique sequence in between repeat annotations.
+    df_uniq_sequence = df_intermediate %>%
+        select(chr, start, end) %>%
+        group_by(chr) %>%
+        mutate(start2 = end, end2 = lead(start)) %>%
+        drop_na() %>%
+        mutate(rClass="Unique Sequence", type="", strand="+") %>%
+        select(chr, start2, end2, rClass, type, strand) %>%
+        rename(start=start2, end=end2)
+
+    df_intermediate <- bind_rows(df_intermediate, df_uniq_sequence) %>%
+        arrange(chr, start)
+
     return(df_intermediate)
 }
 
@@ -88,10 +109,16 @@ read_repeatmasker_bed <- function(input_file) {
 get_colors <- function() {
     default_colors <- c(
         "#522758",
-        "#84bac6", "#84bac6",
-        "#f2b80b", "#ad8c2a"
+        "#84bac6",
+        "#808080",
+        "white"
     )
-    names(default_colors) <- levels(as.factor(c("ALR/Alpha", "HSat1A", "HSat1B", "HSat2", "HSat3")))
+    names(default_colors) <- levels(as.factor(c(
+        "Alpha Satellite",
+        "Human Satellite",
+        "Other Satellite",
+        "Unique Sequence"
+    )))
     return(default_colors)
 }
 
@@ -156,12 +183,12 @@ for (chr_name in unique(df_methyl_binned$chr)) {
                 y = 115,
                 xend = end,
                 yend = 115,
-                colour = rClass
+                colour = rClass,
             ),
             linewidth = 10
         ) +
         scale_color_manual(values = get_colors()) +
-        labs(colour = "Repeats") +
+        labs(colour = "Sequence Composition") +
         geom_area(
             data = df_methyl_binned %>% filter(chr == chr_name),
             aes(x = start, y = as.numeric(meth_prob)),
@@ -196,6 +223,10 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             axis.ticks.x = element_blank(),
             axis.line.x = element_blank(),
             axis.line.y = element_blank(),
+        ) +
+        # Add border around legend elements.
+        theme(
+            legend.key = element_rect(color="black")
         )
 
     plt_cov <- ggplot(
@@ -206,18 +237,28 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             mutate(Unmethylated=cov) %>%
             select(start, Unmethylated, Methylated) %>%
             pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
+            mutate(
+                Coverage=case_when(
+                    Coverage == "Methylated" ~ "Methylated Coverage",
+                    Coverage == "Unmethylated" ~ "Unmethylated Coverage",
+                    .default = Coverage
+                )
+            ) %>%
             # Reorder coverage types.
-            mutate(Coverage = factor(Coverage, levels = c("Unmethylated", "Methylated"))),
+            mutate(Coverage = factor(Coverage, levels = c("Unmethylated Coverage", "Methylated Coverage"))),
         aes(x = start, y = cov_cnt, fill=Coverage),
     ) +
     geom_area(position = "identity") +
     ylab("Coverage") +
-    labs(fill = "Methylation") +
-    scale_fill_manual(values=c("Methylated" = "#FF474C", "Unmethylated" = "#57b9ff")) +
+    scale_fill_manual(values=c("Methylated Coverage" = "#FF474C", "Unmethylated Coverage" = "#57b9ff")) +
     theme_classic() +
     theme(
         axis.line.x = element_blank(),
         axis.line.y = element_blank(),
+    ) +
+    theme(
+        legend.title = element_blank(),
+        legend.key = element_rect(color="black")
     )
 
     plt_ht_prop <- c(3, 1.5)
@@ -230,7 +271,8 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             title = chr_name,
             theme = theme(plot.title = element_text(size = 18))
         ) &
-        scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit="")) &
+        # Expand 0 to avoid padding x-axis bounds.
+        scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit=""), expand = c(0, 0)) &
         xlab("Position (Mbp)")
 
     outfile_pdf <- file.path(argv$output, paste0(chr_name, ".pdf"))

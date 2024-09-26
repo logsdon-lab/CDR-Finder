@@ -1,6 +1,7 @@
 import sys
 import math
 import argparse
+import statistics
 from collections import defaultdict
 from typing import Iterable
 
@@ -71,6 +72,13 @@ def main():
         type=int,
         default=5_000,
         help="Bases to look on both edges of cdr to determine effective height.",
+    )
+    ap.add_argument(
+        "--edge_height_heuristic",
+        type=str,
+        choices=["min", "max", "avg"],
+        default="min",
+        help="Heuristic used to determine edge height of CDR.",
     )
 
     args = ap.parse_args()
@@ -163,15 +171,22 @@ def main():
                 cdr_low = df_cdr["avg"].min()
                 cdr_right_median = df_cdr_right["avg"].median()
                 cdr_left_median = df_cdr_left["avg"].median()
+
                 # If empty, use median.
-                cdr_edge_height = min(
+                edge_heights = [
                     cdr_right_median
                     if cdr_right_median
                     else df_chr_methyl_adj_grp["avg"].median(),
                     cdr_left_median
                     if cdr_left_median
                     else df_chr_methyl_adj_grp["avg"].median(),
-                )
+                ]
+                if args.edge_height_heuristic == "min":
+                    cdr_edge_height = min(edge_heights)
+                elif args.edge_height_heuristic == "max":
+                    cdr_edge_height = max(edge_heights)
+                else:
+                    cdr_edge_height = statistics.mean(edge_heights)
 
                 # Calculate the height of this CDR looking at edges.
                 cdr_height = cdr_edge_height - cdr_low

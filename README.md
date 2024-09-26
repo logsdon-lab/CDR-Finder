@@ -101,6 +101,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |`bp_edge`|Distance in bases to check CDR edges. Used to determine height of dip. Large values give better estimates of true height.|500,000|
 |`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.34|
 |`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs.|0.3|
+|`edge_height_heuristic`|Heuristic used when determining edge height of CDR. Either min, max, or avg.|min|
 
 See [`docs/ISSUES.md`](docs/ISSUES.md) for edge-cases and effects of parameter tuning.
 
