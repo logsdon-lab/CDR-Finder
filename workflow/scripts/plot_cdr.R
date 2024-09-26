@@ -8,6 +8,14 @@ library(data.table)
 library(ggnewscale)
 library(patchwork)
 
+RM_ANNOTATIONS <- c(
+    "Alpha-Satellite"= "#522758",
+    "Human Satellite" = "#84bac6",
+    "Other Satellite" = "#808080",
+    "Non-Satellite" = "white"
+)
+PLOT_HT_PROP <- c(3, 1.5)
+
 
 reformat_repeatmasker_bed <- function(df) {
     df_intermediate <- df
@@ -67,18 +75,18 @@ reformat_repeatmasker_bed <- function(df) {
     df_intermediate <- df_intermediate %>%
         mutate(
             rClass=case_when(
-                rClass == "ALR/Alpha" ~ "Alpha Satellite",
+                rClass == "ALR/Alpha" ~ "Alpha-Satellite",
                 rClass %in% c("HSat1A", "HSat1B", "HSat2", "HSat3") ~ "Human Satellite",
                 .default = "Other Satellite"
             )
         )
-    # Add unique sequence in between repeat annotations.
+    # Add Non-Satellite in between repeat annotations.
     df_uniq_sequence = df_intermediate %>%
         select(chr, start, end) %>%
         group_by(chr) %>%
         mutate(start2 = end, end2 = lead(start)) %>%
         drop_na() %>%
-        mutate(rClass="Unique Sequence", type="", strand="+") %>%
+        mutate(rClass="Non-Satellite", type="", strand="+") %>%
         select(chr, start2, end2, rClass, type, strand) %>%
         rename(start=start2, end=end2)
 
@@ -104,22 +112,6 @@ read_repeatmasker_bed <- function(input_file) {
     # start2 and end2
     df_reformatted <- reformat_repeatmasker_bed(df)
     return(df_reformatted)
-}
-
-get_colors <- function() {
-    default_colors <- c(
-        "#522758",
-        "#84bac6",
-        "#808080",
-        "white"
-    )
-    names(default_colors) <- levels(as.factor(c(
-        "Alpha Satellite",
-        "Human Satellite",
-        "Other Satellite",
-        "Unique Sequence"
-    )))
-    return(default_colors)
 }
 
 p <- arg_parser("Plot cumulative centromere HOR array lengths.")
@@ -175,6 +167,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         geom_segment(
             data = df_cdr %>% filter(chr == chr_name),
             aes(x = start, y = 130, xend = end, yend = 130),
+            key_glyph = "rect"
         ) +
         geom_segment(
             data = df_rm_out %>% filter(chr == chr_name),
@@ -185,14 +178,16 @@ for (chr_name in unique(df_methyl_binned$chr)) {
                 yend = 115,
                 colour = rClass,
             ),
-            linewidth = 10
+            linewidth = 10,
+            key_glyph = "rect"
         ) +
-        scale_color_manual(values = get_colors()) +
+        scale_color_manual(values = RM_ANNOTATIONS) +
         labs(colour = "Sequence Composition") +
         geom_area(
             data = df_methyl_binned %>% filter(chr == chr_name),
             aes(x = start, y = as.numeric(meth_prob)),
             fill = "black",
+            key_glyph = "rect"
         )
 
     if (isTRUE(argv$add_hbar)) {
@@ -221,13 +216,17 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             axis.title.x =  element_blank(),
             axis.text.x = element_blank(),
             axis.ticks.x = element_blank(),
-            axis.line.x = element_blank(),
-            axis.line.y = element_blank(),
         ) +
         # Add border around legend elements.
         theme(
-            legend.key = element_rect(color="black")
-        )
+            legend.key = element_rect(color="black"),
+            legend.key.size = unit(1, 'cm')
+        ) +
+        theme(
+            plot.margin = margin(25, 20, 20, 20)
+        ) +
+        # Don't extend y-axis line beyond 100.
+        coord_cartesian(clip = "off", ylim = c(0, 100))
 
     plt_cov <- ggplot(
         data = df_methyl_binned %>%
@@ -239,33 +238,30 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
             mutate(
                 Coverage=case_when(
-                    Coverage == "Methylated" ~ "Methylated Coverage",
-                    Coverage == "Unmethylated" ~ "Unmethylated Coverage",
+                    Coverage == "Methylated" ~ "Methylated",
+                    Coverage == "Unmethylated" ~ "Total",
                     .default = Coverage
                 )
             ) %>%
             # Reorder coverage types.
-            mutate(Coverage = factor(Coverage, levels = c("Unmethylated Coverage", "Methylated Coverage"))),
+            mutate(Coverage = factor(Coverage, levels = c("Total", "Methylated"))),
         aes(x = start, y = cov_cnt, fill=Coverage),
     ) +
-    geom_area(position = "identity") +
+    geom_area(position = "identity", key_glyph = "rect") +
     ylab("Coverage") +
-    scale_fill_manual(values=c("Methylated Coverage" = "#FF474C", "Unmethylated Coverage" = "#57b9ff")) +
+    scale_fill_manual(values=c("Methylated" = "#FF474C", "Total" = "#57b9ff")) +
+    labs(fill = "Coverage") +
     theme_classic() +
     theme(
-        axis.line.x = element_blank(),
-        axis.line.y = element_blank(),
-    ) +
-    theme(
-        legend.title = element_blank(),
-        legend.key = element_rect(color="black")
+        legend.key = element_rect(color="black"),
+        legend.key.size = unit(1, 'cm')
     )
 
-    plt_ht_prop <- c(3, 1.5)
     plt_final <- plt_methyl / plt_cov +
         plot_layout(
             ncol = 1,
-            heights = unit(plt_ht_prop, c('null', 'null'))
+            guides = 'collect',
+            heights = unit(PLOT_HT_PROP, c('null', 'null'))
         ) +
         plot_annotation(
             title = chr_name,
@@ -282,13 +278,13 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         device = "pdf",
         plt_final,
         width = 12,
-        height = sum(plt_ht_prop),
+        height = sum(PLOT_HT_PROP),
     )
     ggsave(
         outfile_png,
         device = "png",
         plt_final,
         width = 12,
-        height = sum(plt_ht_prop),
+        height = sum(PLOT_HT_PROP),
     )
 }
