@@ -9,10 +9,10 @@ library(ggnewscale)
 library(patchwork)
 
 RM_ANNOTATIONS <- c(
-    "Alpha-Satellite"= "#522758",
-    "Human Satellite" = "#84bac6",
-    "Other Satellite" = "#808080",
-    "Non-Satellite" = "white"
+    "α-satellite"= "#522758",
+    "Human satellite" = "#84bac6",
+    "Other satellite" = "#808080",
+    "Non-satellite" = "white"
 )
 PLOT_HT_PROP <- c(3, 1.5)
 
@@ -75,23 +75,24 @@ reformat_repeatmasker_bed <- function(df) {
     df_intermediate <- df_intermediate %>%
         mutate(
             rClass=case_when(
-                rClass == "ALR/Alpha" ~ "Alpha-Satellite",
-                rClass %in% c("HSat1A", "HSat1B", "HSat2", "HSat3") ~ "Human Satellite",
-                .default = "Other Satellite"
+                rClass == "ALR/Alpha" ~ "α-satellite",
+                rClass %in% c("HSat1A", "HSat1B", "HSat2", "HSat3") ~ "Human satellite",
+                .default = "Other satellite"
             )
         )
-    # Add Non-Satellite in between repeat annotations.
+    # Add Non-satellite in between repeat annotations.
     df_uniq_sequence = df_intermediate %>%
         select(chr, start, end) %>%
         group_by(chr) %>%
         mutate(start2 = end, end2 = lead(start)) %>%
         drop_na() %>%
-        mutate(rClass="Non-Satellite", type="", strand="+") %>%
+        mutate(rClass="Non-satellite", type="", strand="+") %>%
         select(chr, start2, end2, rClass, type, strand) %>%
         rename(start=start2, end=end2)
 
     df_intermediate <- bind_rows(df_intermediate, df_uniq_sequence) %>%
-        arrange(chr, start)
+        arrange(chr, start) %>%
+        mutate(rClass=factor(rClass, levels=names(RM_ANNOTATIONS)))
 
     return(df_intermediate)
 }
