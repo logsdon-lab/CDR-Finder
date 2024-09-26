@@ -164,14 +164,32 @@ dir.create(argv$output_dir, showWarnings = FALSE)
 # 1st coverage, 2nd chr, 3rd average methylation freq
 # Plot bins
 for (chr_name in unique(df_methyl_binned$chr)) {
+    df_rm_out_chr <- df_rm_out %>% filter(chr == chr_name)
+    df_cdr_chr <- df_cdr %>% filter(chr == chr_name)
+    df_methyl_binned_chr <- df_methyl_binned %>% filter(chr == chr_name)
+    df_methyl_binned_chr_divided <- df_methyl_binned_chr %>%
+        mutate(Methylated=(cov * (meth_prob / 100))) %>%
+        # Total cov as unmethylated. Only for plot since identity and everything overlapped.
+        mutate(Unmethylated=cov) %>%
+        select(start, Unmethylated, Methylated) %>%
+        pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
+        mutate(
+            Coverage=case_when(
+                Coverage == "Methylated" ~ "Methylated",
+                Coverage == "Unmethylated" ~ "Total",
+                .default = Coverage
+            )
+        ) %>%
+        # Reorder coverage types.
+        mutate(Coverage = factor(Coverage, levels = c("Total", "Methylated")))
+
     plt_methyl <- ggplot() +
         geom_segment(
-            data = df_cdr %>% filter(chr == chr_name),
+            data = df_cdr_chr,
             aes(x = start, y = 130, xend = end, yend = 130),
-            key_glyph = "rect"
         ) +
         geom_segment(
-            data = df_rm_out %>% filter(chr == chr_name),
+            data = df_rm_out_chr,
             aes(
                 x = start,
                 y = 115,
@@ -182,20 +200,21 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             linewidth = 10,
             key_glyph = "rect"
         ) +
+        # Change key size. This is the only thing that works. ggplot >:(
+        guides(colour = guide_legend(override.aes = list(linewidth=0.2))) +
         scale_color_manual(values = RM_ANNOTATIONS) +
         labs(colour = "Sequence Composition") +
         geom_area(
-            data = df_methyl_binned %>% filter(chr == chr_name),
+            data = df_methyl_binned_chr,
             aes(x = start, y = as.numeric(meth_prob)),
             fill = "black",
-            key_glyph = "rect"
         )
 
     if (isTRUE(argv$add_hbar)) {
         plt_methyl <- plt_methyl +
             # Annotate CDR with with red overlap rectangle and horizontal bar.
             geom_rect(
-                data = df_cdr %>% filter(chr == chr_name),
+                data = df_cdr_chr,
                 aes(
                     xmin = start,
                     ymin = 0,
@@ -209,7 +228,8 @@ for (chr_name in unique(df_methyl_binned$chr)) {
     plt_methyl <- plt_methyl +
         scale_y_continuous(
             labels = unit_format(unit="%"),
-            breaks = seq(0, 100, by = 20)
+            breaks = seq(0, 100, by = 20),
+            expand = c(0, 0)
         ) +
         ylab("Average Methylation Percent") +
         theme_classic() +
@@ -221,7 +241,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         # Add border around legend elements.
         theme(
             legend.key = element_rect(color="black"),
-            legend.key.size = unit(1, 'cm')
+            legend.key.linewidth = unit(0.5, 'cm')
         ) +
         theme(
             plot.margin = margin(25, 20, 20, 20)
@@ -230,33 +250,20 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         coord_cartesian(clip = "off", ylim = c(0, 100))
 
     plt_cov <- ggplot(
-        data = df_methyl_binned %>%
-            filter(chr == chr_name) %>%
-            mutate(Methylated=(cov * (meth_prob / 100))) %>%
-            # Total cov as unmethylated. Only for plot since identity and everything overlapped.
-            mutate(Unmethylated=cov) %>%
-            select(start, Unmethylated, Methylated) %>%
-            pivot_longer(!start, names_to="Coverage", values_to="cov_cnt") %>%
-            mutate(
-                Coverage=case_when(
-                    Coverage == "Methylated" ~ "Methylated",
-                    Coverage == "Unmethylated" ~ "Total",
-                    .default = Coverage
-                )
-            ) %>%
-            # Reorder coverage types.
-            mutate(Coverage = factor(Coverage, levels = c("Total", "Methylated"))),
+        data = df_methyl_binned_chr_divided,
         aes(x = start, y = cov_cnt, fill=Coverage),
     ) +
     geom_area(position = "identity", key_glyph = "rect") +
     ylab("Coverage") +
     scale_fill_manual(values=c("Methylated" = "#FF474C", "Total" = "#57b9ff")) +
+    # Prevent adding space between plot and y-axis
+    scale_y_continuous(expand = c(0, 0)) +
     labs(fill = "Coverage") +
     theme_classic() +
     theme(
         legend.key = element_rect(color="black"),
-        legend.key.size = unit(1, 'cm')
-    )
+    ) +
+    guides(colour = guide_legend(override.aes = list(size=0.2)))
 
     plt_final <- plt_methyl / plt_cov +
         plot_layout(
