@@ -273,7 +273,9 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         ) +
         plot_annotation(
             title = chr_name,
-            theme = theme(plot.title = element_text(size = 18))
+            theme = theme(
+                plot.title = element_text(size = 18, margin=margin(10, 0, 20, 0))
+            )
         ) &
         # Expand 0 to avoid padding x-axis bounds.
         scale_x_continuous(labels = unit_format(scale = 1e-6, accuracy=0.1, unit=""), expand = c(0, 0)) &
