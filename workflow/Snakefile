@@ -299,9 +299,11 @@ rule call_cdrs:
             f"--thr_prom_perc_valley {PROM_THRESHOLD}" if PROM_THRESHOLD else ""
         ),
         edge_height_heuristic=EDGE_HEIGHT_HEURISTIC,
-        extend_edges_std=f"--extend_edges_std {EXTEND_EDGES_STD}"
-        if EXTEND_EDGES_STD
-        else "",
+        extend_edges_std=(
+            f"--extend_edges_std {EXTEND_EDGES_STD}"
+            if isinstance(EXTEND_EDGES_STD, int)
+            else ""
+        ),
         thr_height_perc_valley=HEIGHT_THRESHOLD,
     conda:
         "envs/python.yaml"
