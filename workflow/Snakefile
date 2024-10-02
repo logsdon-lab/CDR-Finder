@@ -15,6 +15,7 @@ WINDOW = config["window_size"]
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 BP_MERGE = config.get("bp_merge", 1)
 BP_EDGE = config.get("bp_edge", 500_000)
+EXTEND_EDGES_STD = config.get("extend_edges_std", -1)
 BP_ALR_MERGE = config.get("bp_alr_merge", 1000)
 HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.34)
 PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
@@ -298,6 +299,9 @@ rule call_cdrs:
             f"--thr_prom_perc_valley {PROM_THRESHOLD}" if PROM_THRESHOLD else ""
         ),
         edge_height_heuristic=EDGE_HEIGHT_HEURISTIC,
+        extend_edges_std=f"--extend_edges_std {EXTEND_EDGES_STD}"
+        if EXTEND_EDGES_STD
+        else "",
         thr_height_perc_valley=HEIGHT_THRESHOLD,
     conda:
         "envs/python.yaml"
@@ -309,7 +313,8 @@ rule call_cdrs:
         --thr_height_perc_valley {params.thr_height_perc_valley} \
         --bp_edge {params.bp_edge} \
         --edge_height_heuristic {params.edge_height_heuristic} \
-        {params.bp_merge} {params.thr_prom_perc_valley} > {output} 2> {log}
+        {params.bp_merge} {params.thr_prom_perc_valley} \
+        {extend_edges_std} > {output} 2> {log}
         """
 
 

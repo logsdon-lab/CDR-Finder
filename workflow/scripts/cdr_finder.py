@@ -74,6 +74,12 @@ def main():
         help="Bases to look on both edges of cdr to determine effective height.",
     )
     ap.add_argument(
+        "--extend_edges_std",
+        type=int,
+        default=None,
+        help="Extend edges of CDR until the mean signal with the given stdev is reached. Adds smaller, less prominent CDRs if missed. A value of 0 is the mean while +1/-1 is one stdev above/below the mean.",
+    )
+    ap.add_argument(
         "--edge_height_heuristic",
         type=str,
         choices=["min", "max", "avg"],
@@ -106,12 +112,15 @@ def main():
             )
             .partition_by("brk")
         )
+        avg_methyl_median = df_chr_methyl["avg"].median()
+        avg_methyl_mean = df_chr_methyl["avg"].mean()
+        avg_methyl_std = df_chr_methyl["avg"].std()
         cdr_prom_thr = (
-            df_chr_methyl["avg"].median() * args.thr_prom_perc_valley
+            avg_methyl_median * args.thr_prom_perc_valley
             if args.thr_prom_perc_valley
             else None
         )
-        cdr_height_thr = df_chr_methyl["avg"].median() * args.thr_height_perc_valley
+        cdr_height_thr = avg_methyl_median * args.thr_height_perc_valley
         print(
             f"Using CDR height threshold of {cdr_height_thr} and prominence threshold of {cdr_prom_thr} for {chrom}.",
             file=sys.stderr,
@@ -157,14 +166,14 @@ def main():
                     df_chr_methyl_adj_grp, interval_cdr_left, ignore_intervals
                 ).with_columns(
                     avg=pl.when(pl.col("ignore"))
-                    .then(df_chr_methyl["avg"].median())
+                    .then(avg_methyl_median)
                     .otherwise(pl.col("avg"))
                 )
                 df_cdr_right = get_interval(
                     df_chr_methyl_adj_grp, interval_cdr_right, ignore_intervals
                 ).with_columns(
                     avg=pl.when(pl.col("ignore"))
-                    .then(df_chr_methyl["avg"].median())
+                    .then(avg_methyl_median)
                     .otherwise(pl.col("avg"))
                 )
 
@@ -191,17 +200,38 @@ def main():
                 # Calculate the height of this CDR looking at edges.
                 cdr_height = cdr_edge_height - cdr_low
 
+                # Ignore CDR if less than height.
+                if cdr_height < cdr_height_thr:
+                    continue
+
+                print(
+                    f"Found CDR at {chrom}:{interval.begin}-{interval.end} with height of {cdr_height} and prominence {cdr_prom}.",
+                    file=sys.stderr,
+                )
+
+                if isinstance(args.extend_edges_std, int):
+                    edge_thr = avg_methyl_mean + (
+                        args.extend_edges_std * avg_methyl_std
+                    )
+                    try:
+                        cdr_st = df_cdr_left.filter(
+                            (pl.col("st") < cdr_st) & (pl.col("avg") >= edge_thr)
+                        ).row(-1, named=True)["st"]
+                    except pl.exceptions.OutOfBoundsError:
+                        cdr_st = cdr_st
+                    try:
+                        cdr_end = df_cdr_right.filter(
+                            (pl.col("end") > cdr_end) & (pl.col("avg") >= edge_thr)
+                        ).row(0, named=True)["end"]
+                    except pl.exceptions.OutOfBoundsError:
+                        cdr_end = cdr_end
+
                 # Add merge distance bp.
                 if args.bp_merge:
                     cdr_st = cdr_st - args.bp_merge
                     cdr_end = cdr_end + args.bp_merge
 
-                if cdr_height >= cdr_height_thr:
-                    print(
-                        f"Found CDR at {chrom}:{interval.begin}-{interval.end} with height of {cdr_height} and prominence {cdr_prom}.",
-                        file=sys.stderr,
-                    )
-                    cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
+                cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
     for chrom, cdrs in cdr_intervals.items():

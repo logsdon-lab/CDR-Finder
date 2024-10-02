@@ -20,6 +20,13 @@ from test.helpers.integration import run_integration_test
             tuple(["--bp_edge", str(500_000)]),
         ),
         (
+            "test/cdr/input/HG00731_intersect.bed",
+            "test/cdr/expected/HG00731_cdr_ext.bed",
+            0.5,
+            0.5,
+            tuple(["--bp_edge", str(500_000), "--extend_edges_std", str(0)]),
+        ),
+        (
             "test/cdr/input/NA19331_intersect.bed",
             "test/cdr/expected/NA19331_cdr.bed",
             0.5,

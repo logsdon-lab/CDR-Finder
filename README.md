@@ -10,13 +10,15 @@ Original pipeline constructed by @arozanski97 with help from Glennis Logsdon
 Adapted and distributed by @fkmastrorosa, @wharvey31, and @koisland.
 
 This is done by:
-- Extracting the sequence of interest
-- Intersect the sequence with its methylation data
-- Bin the region of interest into 5 kbp windows and calculate their mean methylation percentage
+- Extracting the sequence of interest.
+- Intersect the sequence with its methylation data.
+- Bin the region of interest into 5 kbp windows and calculate the mean methylation percentage.
 - Run RepeatMasker on the sequence of interest to identify regions containing alpha-satellite repeats (ALR/Alpha)
 - For each alpha-satellite containing region:
     * Merge consecutive bins.
-    * Detect valleys in average methylation percentage based on relative height and prominence.
+    * Detect valleys in average methylation percentage based on relative prominence.
+    * Check sides of each found CDR, filtering other CDRs, to calculate its relative height.
+    * Optionally, extend edges to mean signal and some number of standard deviations to get missed peaks.
     * Optionally, merge adjacent detected CDRs.
 
 
@@ -102,6 +104,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.34|
 |`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs.|0.3|
 |`edge_height_heuristic`|Heuristic used when determining edge height of CDR. Either min, max, or avg.|min|
+|`extend_edges_std`|Extend edges of CDR until the mean average methylation signal and some number of standard deviations is reached. May fix smaller, less prominent CDRs being missed. A value of 0 is the mean while +1/-1 is one stdev above/below the mean.|-1|
 
 See [`docs/ISSUES.md`](docs/ISSUES.md) for edge-cases and effects of parameter tuning.
 

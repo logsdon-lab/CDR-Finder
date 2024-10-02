@@ -22,3 +22,5 @@ prom_perc_valley_threshold: 0.3
 bp_alr_merge: 1000
 
 bp_edge: 500000
+
+extend_edges_std: -1

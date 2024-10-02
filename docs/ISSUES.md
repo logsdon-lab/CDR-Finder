@@ -30,3 +30,19 @@ With `height_perc_valley_threshold` of `0.34` and default parameters.
 
 Requiring 60% of the median methylation average with `height_perc_valley_threshold` at `0.6` fixes this issue.
 ![](issues/NA19331_haplotype1-0000025_ht0.6.png)
+
+### Missing non-prominent CDRs
+To include these, use `--extend_edges_std`. This extends the edges of existing CDRs until the mean plus some number of standard deviations is reached.
+* We use the mean as it's more sensitive to outliers. These dips in methylation within the CDR will reduce the mean and prevent falsely including non CDR regions.
+
+> [!Note]
+> This has a similar effect to `--bp_merge` and may merge over peaks. Reduce the value to prevent this.
+
+Don't extend.
+![](issues/HG00731_haplotype2-0000044.png)
+
+Extend until the mean.
+![](issues/HG00731_haplotype2-0000044_ext0.png)
+
+Extend until the 1 stdev below the mean.
+![](issues/HG00731_haplotype2-0000044_ext-1.png)
