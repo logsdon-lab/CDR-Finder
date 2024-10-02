@@ -314,7 +314,7 @@ rule call_cdrs:
         --bp_edge {params.bp_edge} \
         --edge_height_heuristic {params.edge_height_heuristic} \
         {params.bp_merge} {params.thr_prom_perc_valley} \
-        {extend_edges_std} > {output} 2> {log}
+        {params.extend_edges_std} > {output} 2> {log}
         """
 
 
