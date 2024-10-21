@@ -3,6 +3,6 @@ channels:
 dependencies:
   - python==3.12
   - pip:
-    - polars
-    - scipy
-    - intervaltree
+    - intervaltree==3.1.0
+    - polars==0.20.31
+    - scipy==1.14.1
