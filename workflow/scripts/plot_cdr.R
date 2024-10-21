@@ -230,7 +230,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             breaks = seq(0, 100, by = 20),
             expand = c(0, 0)
         ) +
-        ylab("Average CpG Methylation (%)") +
+        ylab("Average CpG\nMethylation (%)") +
         theme_classic() +
         theme(
             axis.title.x =  element_blank(),
