@@ -227,11 +227,10 @@ for (chr_name in unique(df_methyl_binned$chr)) {
     }
     plt_methyl <- plt_methyl +
         scale_y_continuous(
-            labels = unit_format(unit="%"),
             breaks = seq(0, 100, by = 20),
             expand = c(0, 0)
         ) +
-        ylab("Average Methylation Percent") +
+        ylab("Average CpG\nMethylation (%)") +
         theme_classic() +
         theme(
             axis.title.x =  element_blank(),
@@ -254,7 +253,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         aes(x = start, y = cov_cnt, fill=Coverage),
     ) +
     geom_area(position = "identity", key_glyph = "rect") +
-    ylab("Coverage") +
+    ylab("Coverage (x)") +
     scale_fill_manual(values=c("Methylated" = "#FF474C", "Total" = "#57b9ff")) +
     # Prevent adding space between plot and y-axis
     scale_y_continuous(expand = c(0, 0)) +

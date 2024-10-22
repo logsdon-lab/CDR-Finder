@@ -3,8 +3,8 @@ channels:
 dependencies:
   - python==3.12
   - pip:
-    - snakemake
+    - snakemake==8.18.2
     - pytest
-    - intervaltree
-    - polars
-    - scipy
+    - intervaltree==3.1.0
+    - polars==0.20.31
+    - scipy==1.14.1
