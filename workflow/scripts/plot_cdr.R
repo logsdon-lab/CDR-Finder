@@ -197,6 +197,22 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         mutate(Coverage = factor(Coverage, levels = c("Total", "Methylated")))
 
     plt_methyl <- ggplot() +
+        # Add outline segment.
+        geom_segment(
+            data = data.table(
+                start=c(min(df_rm_out_chr$start)),
+                end=c(max(df_rm_out_chr$end))
+            ),
+            aes(
+                x = start - 2000,
+                y = 115,
+                xend = end + 2000,
+                yend = 115,
+                show_legend=FALSE
+            ),
+            linewidth = 10.5,
+            alpha = 0.75
+        ) +
         geom_segment(
             data = df_cdr_chr,
             aes(x = start, y = 130, xend = end, yend = 130),
