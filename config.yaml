@@ -24,3 +24,6 @@ bp_alr_merge: 1000
 bp_edge: 500000
 
 extend_edges_std: -1
+
+# Add red horizontal bar where CDR is.
+add_hbar: true

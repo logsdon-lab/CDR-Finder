@@ -139,6 +139,12 @@ p <- add_argument(
   flag = TRUE,
   type = "logical"
 )
+p <- add_argument(
+  p, "--titles",
+  help = "Two column TSV file with chr name and title. If none found, the chr name is used.",
+  default = NA,
+  type = "character"
+)
 argv <- parse_args(p)
 
 df_cdr <- fread(
@@ -155,6 +161,13 @@ df_methyl_binned <- fread(
     select = c(1:5),
     col.names = c("chr", "start", "end", "meth_prob", "cov")
 )
+
+# Load title if provided
+if (!is.na(argv$titles)) {
+    df_titles <- fread(argv$titles, header = FALSE, select = c(1:2), col.names = c("chr", "title"))
+} else {
+    df_titles <- data.table(chr=character(), title=character())
+}
 
 df_rm_out <- read_repeatmasker_bed(argv$input_rm)
 
@@ -203,7 +216,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
         # Change key size. This is the only thing that works. ggplot >:(
         guides(colour = guide_legend(override.aes = list(linewidth=0.2))) +
         scale_color_manual(values = RM_ANNOTATIONS) +
-        labs(colour = "Sequence Composition") +
+        labs(colour = "Sequence composition") +
         geom_area(
             data = df_methyl_binned_chr,
             aes(x = start, y = as.numeric(meth_prob)),
@@ -230,7 +243,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             breaks = seq(0, 100, by = 20),
             expand = c(0, 0)
         ) +
-        ylab("Average CpG\nMethylation (%)") +
+        ylab("Mean CpG\nmethylation (%)") +
         theme_classic() +
         theme(
             axis.title.x =  element_blank(),
@@ -264,6 +277,18 @@ for (chr_name in unique(df_methyl_binned$chr)) {
     ) +
     guides(colour = guide_legend(override.aes = list(size=0.2)))
 
+    # Get plot title and default to chr name if none provided.
+    plt_title <- df_titles %>%
+        filter(chr == chr_name) %>%
+        pull(title) %>%
+        # Why doesn't first(default=chr_name) work? dpylr >:(
+        first()
+    if (length(plt_title) == 0) {
+        plt_title <- chr_name
+    } else {
+        plt_title <- plt_title
+    }
+
     plt_final <- plt_methyl / plt_cov +
         plot_layout(
             ncol = 1,
@@ -271,7 +296,7 @@ for (chr_name in unique(df_methyl_binned$chr)) {
             heights = unit(PLOT_HT_PROP, c('null', 'null'))
         ) +
         plot_annotation(
-            title = chr_name,
+            title = plt_title,
             theme = theme(
                 plot.title = element_text(size = 18, margin=margin(10, 0, 20, 0))
             )
