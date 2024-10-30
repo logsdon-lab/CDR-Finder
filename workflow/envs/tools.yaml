@@ -6,3 +6,4 @@ dependencies:
   - bedtools
   - ont-modkit==0.3.2
   - samtools
+  - seqtk

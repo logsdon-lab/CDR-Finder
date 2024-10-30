@@ -48,6 +48,7 @@ rule subset_fasta:
         bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
         rm_fasta=join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta"),
+        rm_fasta_idx=join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta.fai"),
     log:
         join(LOG_DIR, "subset_fasta_{sample}.log"),
     resources:
@@ -59,6 +60,7 @@ rule subset_fasta:
     shell:
         """
         bedtools getfasta -fi {input.fasta} -bed {input.bed} > {output.rm_fasta} 2> {log}
+        samtools faidx {output.rm_fasta} 2>> {log}
         """
 
 
@@ -101,18 +103,43 @@ rule get_methylation_bed:
 
 
 ###
+# Rename fasta to avoid RepeatMasker ID limit.
+###
+rule rename_fasta:
+    input:
+        fasta=rules.subset_fasta.output.rm_fasta,
+        fasta_idx=rules.subset_fasta.output.rm_fasta_idx,
+    output:
+        renamed_fasta=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset_renamed.fasta")),
+        renamed_fasta_idx=temp(
+            join(OUTPUT_DIR, "fasta", "{sample}_subset_renamed.fasta.fai")
+        ),
+        rename_key=join(OUTPUT_DIR, "fasta", "{sample}_subset_rename_key.tsv"),
+    log:
+        join(LOG_DIR, "rename_fasta_{sample}.log"),
+    conda:
+        "envs/tools.yaml"
+    shell:
+        """
+        seqtk rename {input.fasta} "seq" > {output.renamed_fasta} 2> {log}
+        samtools faidx {output.renamed_fasta} 2>> {log}
+        paste -d'\\t' <(cut -f 1 {output.renamed_fasta_idx}) <(cut -f 1 {input.fasta_idx}) > {output.rename_key} 2>> {log}
+        """
+
+
+###
 # run_rm: Runs repeatmasker on the extracted subsequence fasta from rule subset_fasta
 ###
 
 
 rule run_rm:
     input:
-        fasta=rules.subset_fasta.output.rm_fasta,
+        fasta=rules.rename_fasta.output.renamed_fasta,
     output:
         rm_out=join(
             OUTPUT_DIR,
             "rm",
-            "{sample}_subset.fasta.out",
+            "{sample}_subset_renamed.fasta.out",
         ),
     log:
         join(LOG_DIR, "run_rm_{sample}.log"),
@@ -183,6 +210,7 @@ rule calc_windows:
 rule format_filter_RM:
     input:
         rm_out=rules.run_rm.output.rm_out,
+        rename_key=rules.rename_fasta.output.rename_key,
     output:
         rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm.bed"),
         rm_alr_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR.bed"),
@@ -196,13 +224,24 @@ rule format_filter_RM:
     threads: 1
     shell:
         """
-        awk -v OFS="\\t" 'NR > 3 {{
-            split($5, chr_names, ":")
-            print chr_names[1], $6, $7, $10, $11, $9 > "{output.rm_bed}"
-            if ( $10 ~ "ALR" ) {{
-                print chr_names[1], $6, $7, $10, $9
+        awk -v OFS="\\t" '{{
+            # Read key values in first file.
+            if (FNR == NR) {{
+                kv[$1]=$2;
+                next;
             }}
-        }}' {input.rm_out} > {output.rm_alr_bed} 2> {log}
+            # Skip header.
+            if (NR > 5) {{
+                # Replace renamed seq name with original.
+                chr_name=kv[$5]
+                # Get chr name without coordinates
+                split(chr_name, chr_names, ":")
+                print chr_names[1], $6, $7, $10, $11, $9 > "{output.rm_bed}"
+                if ( $10 ~ "ALR" ) {{
+                    print chr_names[1], $6, $7, $10, $9
+                }}
+            }}
+        }}' {input.rename_key} {input.rm_out} > {output.rm_alr_bed} 2> {log}
         """
 
 
