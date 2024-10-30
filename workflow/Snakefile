@@ -10,7 +10,10 @@ include: "rules/utils.smk"
 containerized: "docker://logsdonlab/cdr-finder:latest"
 
 
+# Sample manifest dict.
 MANIFEST = config["samples"]
+
+# CDR and other
 WINDOW = config["window_size"]
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
 BP_MERGE = config.get("bp_merge", 1)
@@ -20,9 +23,14 @@ BP_ALR_MERGE = config.get("bp_alr_merge", 1000)
 HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.34)
 PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
 EDGE_HEIGHT_HEURISTIC = config.get("edge_height_heuristic", "min")
+
+# Workflow params
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
+
+# Plot params
+ADD_HBAR = config.get("add_hbar", True)
 
 
 wildcard_constraints:
@@ -198,6 +206,9 @@ rule format_filter_RM:
         """
 
 
+###
+# Adjust coordinates by adding back target bed coords.
+###
 use rule add_target_bed_coords as add_target_bed_coords_rm_alr with:
     input:
         # 3-cols
@@ -326,10 +337,14 @@ rule plot_cdr:
         binned_freq_bed=rules.add_target_bed_coords_windows.output,
         cdr_bed=rules.call_cdrs.output,
         rm_bed=rules.add_target_bed_coords_rm.output,
+        titles=lambda wc: MANIFEST[wc.sample].get("titles", []),
     output:
         directory(join(OUTPUT_DIR, "plot", "{sample}")),
     log:
         join(LOG_DIR, "plot_cdr_{sample}.log"),
+    params:
+        add_hbar="--add_hbar" if ADD_HBAR else "",
+        titles=lambda wc, input: f"--titles {input.titles}" if input.titles else "",
     benchmark:
         join(BMK_DIR, "plot_cdr_{sample}.tsv")
     resources:
@@ -344,7 +359,8 @@ rule plot_cdr:
         --input_rm {input.rm_bed} \
         --input_cdr {input.cdr_bed} \
         --output_dir {output} \
-        --add_hbar 2> {log}
+        {params.titles} \
+        {params.add_hbar} 2> {log}
         """
 
 

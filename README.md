@@ -84,6 +84,9 @@ Multiple samples can be provided via the configfile. Each sample should contain 
     * https://github.com/epi2me-labs/modbam2bed?tab=readme-ov-file#usage
 - `regions`
     * BED file of target region coordinates.
+- `titles`
+    * Optional
+    * Two column TSV file with chrom name and plot title name.
 
 ## Output
 - `cdr_bed`
