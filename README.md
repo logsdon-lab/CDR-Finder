@@ -112,9 +112,10 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 See [`docs/ISSUES.md`](docs/ISSUES.md) for edge-cases and effects of parameter tuning.
 
 ## Testing
-Set up conda environment.
+Set up the dev conda environment and pull test data with [`git-lfs`](https://git-lfs.com/).
 ```bash
 conda env create --name test_cdr_finder -f env_dev.yaml
+git lfs install && git lfs pull
 ```
 
 To run the test case on chr8 and chr21.
