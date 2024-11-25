@@ -24,7 +24,7 @@ This is done by:
 
 ## Getting Started
 ```bash
-git clone https://github.com/koisland/CDR-Finder
+git clone https://github.com/EichlerLab/CDR-Finder.git
 cd CDR-Finder
 ```
 
