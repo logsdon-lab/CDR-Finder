@@ -114,7 +114,7 @@ See [`docs/ISSUES.md`](docs/ISSUES.md) for edge-cases and effects of parameter t
 ## Testing
 Set up the conda environment and pull test data with [`git-lfs`](https://git-lfs.com/).
 ```bash
-conda env create --name cdr_finder -f test/env.yaml
+conda env create --name cdr_finder -f env.yaml
 conda activate cdr_finder
 git lfs install && git lfs pull
 ```
