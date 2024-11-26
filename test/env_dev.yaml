@@ -2,6 +2,7 @@ channels:
   - conda-forge
 dependencies:
   - python==3.12
+  - anaconda::git-lfs
   - pip:
     - snakemake==8.18.2
     - pytest
