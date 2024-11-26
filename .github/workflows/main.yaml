@@ -18,7 +18,7 @@ jobs:
 
     - name: Install Snakemake and testing dependencies.
       run: |
-        pip install -r <(yq -r '.dependencies[] | select(type == "!!map") | to_entries[].value[]' test/env_dev.yaml)
+        pip install -r <(yq -r '.dependencies[] | select(type == "!!map") | to_entries[].value[]' env.yaml)
 
     - name: Install Singularity.
       uses: singularityhub/install-singularity@main
