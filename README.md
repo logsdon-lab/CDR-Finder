@@ -112,10 +112,10 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 See [`docs/ISSUES.md`](docs/ISSUES.md) for edge-cases and effects of parameter tuning.
 
 ## Testing
-Set up the dev conda environment and pull test data with [`git-lfs`](https://git-lfs.com/).
+Set up the conda environment and pull test data with [`git-lfs`](https://git-lfs.com/).
 ```bash
-conda env create --name test_cdr_finder -f test/env_dev.yaml
-conda activate test_cdr_finder
+conda env create --name cdr_finder -f env.yaml
+conda activate cdr_finder
 git lfs install && git lfs pull
 ```
 
