@@ -147,7 +147,7 @@ rule run_rm:
         join(BMK_DIR, "run_rm_{sample}.tsv")
     params:
         engine="rmblast",
-        species="human",
+        species=config.get("species", "human"),
         output_dir=lambda wc, output: os.path.dirname(str(output)),
     resources:
         mem=8,
@@ -332,7 +332,12 @@ rule intersect_RM:
 rule call_cdrs:
     input:
         script=workflow.source_path("scripts/cdr_finder.py"),
-        intersect_bed=rules.intersect_RM.output.intersect_bed,
+        methyl_bed=(
+            rules.intersect_RM.output.intersect_bed
+            if config.get("restrict_alr")
+            else
+            rules.add_target_bed_coords_windows.output
+        ),
     output:
         cdrs=join(OUTPUT_DIR, "bed", "{sample}_CDR.bed"),
     log:
@@ -361,7 +366,7 @@ rule call_cdrs:
     shell:
         """
         python {input.script} \
-        -i {input.intersect_bed} \
+        -i {input.methyl_bed} \
         --thr_height_perc_valley {params.thr_height_perc_valley} \
         --bp_edge {params.bp_edge} \
         --edge_height_heuristic {params.edge_height_heuristic} \

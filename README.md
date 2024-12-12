@@ -99,6 +99,8 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 ## Parameters
 |parameter|description|default|
 |-|-|-|
+|`species`|Species to use for RepeatMasker Dfam database. **CDR-Finder was designed for human centromeres so performance in other species is untested. Use with caution.** See https://www.repeatmasker.org/genomicDatasets/RMGenomicDatasets.html.|human|
+|`restrict_alr`|Restrict CDR search to sequence annotated as `ALR/Alpha` by RepeatMasker. **Disabling this will cause false positives and should only be set to `false` if the input region is well curated.**|true|
 |`window_size`|Size of the methylation windows to average over.|5000|
 |`alr_threshold`|Size of ALR repeat stretches to include in search of CDR.|100,000|
 |`bp_merge`|Distance in bases to merge adjacent CDRs. Can be omitted.|1|
@@ -138,3 +140,6 @@ make docker
 ```bash
 make singularity
 ```
+
+## Cite
+* Glennis A Logsdon, F Kumara Mastrorosa, Keisuke K Oshima, Allison N Rozanski, William T Harvey, Evan E Eichler, Identification and annotation of centromeric hypomethylated regions with Centromere Dip Region (CDR)-Finder, Bioinformatics, 2024;, btae733, https://doi.org/10.1093/bioinformatics/btae733*

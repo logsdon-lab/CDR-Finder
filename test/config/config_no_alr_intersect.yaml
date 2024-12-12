@@ -1,16 +1,16 @@
 samples:
   CHM13:
-    fasta: T2T-CHM13v2.fasta
-    regions: target_region.bed
-    bam: T2T-CHM13v2.bam
+    fasta: test/data/fa/CHM13_chr8_chr21.fa.gz
+    regions: test/data/bed/CHM13_cen_500kbp.bed
+    bam: test/data/bam/CHM13_chr8_chr21.bam
+    # Add plot titles
+    titles: test/data/bed/titles.tsv
 
 # Species to use for RepeatMasker
-# See https://www.repeatmasker.org/genomicDatasets/RMGenomicDatasets.html
 species: "human"
 
 # Restrict to alpha-satellite repeat annotated sequence.
-# NOTE: If disabled, this will give false positives if the region is not well curated.
-restrict_alr: true
+restrict_alr: false
 
 # Size of the methylation windows to average over
 window_size: 5000
@@ -31,7 +31,4 @@ bp_alr_merge: 1000
 
 bp_edge: 500000
 
-extend_edges_std: -1
-
-# Add red horizontal bar where CDR is.
-add_hbar: true
+extend_edges_std: null
