@@ -9,7 +9,7 @@ samples:
 species: "human"
 
 # Restrict to alpha-satellite repeat annotated sequence.
-# NOTE: This will give false positives if the region is not well curated.
+# NOTE: If disabled, this will give false positives if the region is not well curated.
 restrict_alr: true
 
 # Size of the methylation windows to average over
