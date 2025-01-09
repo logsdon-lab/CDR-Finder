@@ -33,6 +33,20 @@ from test.helpers.integration import run_integration_test
             0.5,
             tuple(["--bp_edge", str(500_000)]),
         ),
+        (
+            "test/cdr/input/CHM13_intersect.bed",
+            "test/cdr/expected/CHM13_cdr.bed",
+            0.5,
+            0.5,
+            tuple(
+                [
+                    "--bp_edge",
+                    str(500_000),
+                    "--override_chrom_params",
+                    "test/config/chr8_params.json",
+                ]
+            ),
+        ),
     ],
 )
 def test_cdr_finder(

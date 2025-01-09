@@ -1,5 +1,6 @@
 import sys
 import math
+import json
 import argparse
 import statistics
 from collections import defaultdict
@@ -86,6 +87,12 @@ def main():
         default="min",
         help="Heuristic used to determine edge height of CDR.",
     )
+    ap.add_argument(
+        "--override_chrom_params",
+        type=str,
+        default=None,
+        help="JSON file with params per chromosome name to override default settings. Each parameter name should match.",
+    )
 
     args = ap.parse_args()
     df = pl.read_csv(
@@ -94,10 +101,31 @@ def main():
         has_header=False,
         new_columns=["chrom", "st", "end", "avg"],
     )
+    if args.override_chrom_params:
+        with open(args.override_chrom_params, "rt") as fh:
+            override_params = json.load(fh)
+    else:
+        override_params = {}
 
     cdr_intervals: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
     for chrom, df_chr_methyl in df.group_by(["chrom"]):
         chrom: str = chrom[0]
+
+        # Get override params.
+        thr_prom_perc_valley = override_params.get(chrom, {}).get(
+            "thr_prom_perc_valley", args.thr_prom_perc_valley
+        )
+        thr_height_perc_valley = override_params.get(chrom, {}).get(
+            "thr_height_perc_valley", args.thr_height_perc_valley
+        )
+        bp_edge = override_params.get(chrom, {}).get("bp_edge", args.bp_edge)
+        edge_height_heuristic = override_params.get(chrom, {}).get(
+            "edge_height_heuristic", args.edge_height_heuristic
+        )
+        extend_edges_std = override_params.get(chrom, {}).get(
+            "extend_edges_std", args.extend_edges_std
+        )
+        bp_merge = override_params.get(chrom, {}).get("bp_merge", args.bp_merge)
 
         # Group adjacent, contiguous intervals.
         df_chr_methyl_adj_groups = (
@@ -116,11 +144,9 @@ def main():
         avg_methyl_mean = df_chr_methyl["avg"].mean()
         avg_methyl_std = df_chr_methyl["avg"].std()
         cdr_prom_thr = (
-            avg_methyl_median * args.thr_prom_perc_valley
-            if args.thr_prom_perc_valley
-            else None
+            avg_methyl_median * thr_prom_perc_valley if thr_prom_perc_valley else None
         )
-        cdr_height_thr = avg_methyl_median * args.thr_height_perc_valley
+        cdr_height_thr = avg_methyl_median * thr_height_perc_valley
         print(
             f"Using CDR height threshold of {cdr_height_thr} and prominence threshold of {cdr_prom_thr} for {chrom}.",
             file=sys.stderr,
@@ -155,8 +181,8 @@ def main():
                 ignore_intervals = grp_cdr_intervals.difference([interval])
                 df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
 
-                interval_cdr_left = Interval(cdr_st - args.bp_edge, cdr_st)
-                interval_cdr_right = Interval(cdr_end, cdr_end + args.bp_edge)
+                interval_cdr_left = Interval(cdr_st - bp_edge, cdr_st)
+                interval_cdr_right = Interval(cdr_end, cdr_end + bp_edge)
 
                 # Get left and right side of CDR.
                 # Subtract intervals if overlapping bp edge region.
@@ -190,9 +216,9 @@ def main():
                     if cdr_left_median
                     else df_chr_methyl_adj_grp["avg"].median(),
                 ]
-                if args.edge_height_heuristic == "min":
+                if edge_height_heuristic == "min":
                     cdr_edge_height = min(edge_heights)
-                elif args.edge_height_heuristic == "max":
+                elif edge_height_heuristic == "max":
                     cdr_edge_height = max(edge_heights)
                 else:
                     cdr_edge_height = statistics.mean(edge_heights)
@@ -209,10 +235,8 @@ def main():
                     file=sys.stderr,
                 )
 
-                if isinstance(args.extend_edges_std, int):
-                    edge_thr = avg_methyl_mean + (
-                        args.extend_edges_std * avg_methyl_std
-                    )
+                if isinstance(extend_edges_std, int):
+                    edge_thr = avg_methyl_mean + (extend_edges_std * avg_methyl_std)
                     try:
                         cdr_st = df_cdr_left.filter(
                             (pl.col("st") < cdr_st) & (pl.col("avg") >= edge_thr)
@@ -227,15 +251,15 @@ def main():
                         cdr_end = cdr_end
 
                 # Add merge distance bp.
-                if args.bp_merge:
-                    cdr_st = cdr_st - args.bp_merge
-                    cdr_end = cdr_end + args.bp_merge
+                if bp_merge:
+                    cdr_st = cdr_st - bp_merge
+                    cdr_end = cdr_end + bp_merge
 
                 cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
     for chrom, cdrs in cdr_intervals.items():
-        if args.bp_merge:
+        if bp_merge:
             starting_intervals = len(cdrs)
             cdrs.merge_overlaps()
             print(
@@ -245,9 +269,9 @@ def main():
 
         for cdr in cdrs.iter():
             cdr_st, cdr_end = cdr.begin, cdr.end
-            if args.bp_merge:
-                cdr_st += args.bp_merge
-                cdr_end -= args.bp_merge
+            if bp_merge:
+                cdr_st += bp_merge
+                cdr_end -= bp_merge
 
             args.outfile.write(f"{chrom}\t{cdr_st}\t{cdr_end}\n")
 
