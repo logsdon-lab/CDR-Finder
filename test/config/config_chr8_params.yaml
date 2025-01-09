@@ -1,0 +1,29 @@
+samples:
+  CHM13:
+    fasta: test/data/fa/CHM13_chr8_chr21.fa.gz
+    regions: test/data/bed/CHM13_cen_500kbp.bed
+    bam: test/data/bam/CHM13_chr8_chr21.bam
+    override_chrom_params: test/config/chr8_params.json
+    # Add plot titles
+    titles: test/data/bed/titles.tsv
+
+# Size of the methylation windows to average over
+window_size: 5000
+
+# Size of ALR repeat stretches to include in search of CDR
+alr_threshold: 100000
+
+# Distance to merge adjacent CDRs. Can omit.
+bp_merge: 1
+
+# Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
+# ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
+height_perc_valley_threshold: 0.34
+
+prom_perc_valley_threshold: 0.3
+
+bp_alr_merge: 1000
+
+bp_edge: 500000
+
+extend_edges_std: null

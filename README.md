@@ -142,4 +142,4 @@ make singularity
 ```
 
 ## Cite
-* Glennis A Logsdon, F Kumara Mastrorosa, Keisuke K Oshima, Allison N Rozanski, William T Harvey, Evan E Eichler, Identification and annotation of centromeric hypomethylated regions with Centromere Dip Region (CDR)-Finder, Bioinformatics, 2024;, btae733, https://doi.org/10.1093/bioinformatics/btae733*
+* Francesco Kumara Mastrorosa, Keisuke K Oshima, Allison N Rozanski, William T Harvey, Evan E Eichler, Glennis A Logsdon, Identification and annotation of centromeric hypomethylated regions with CDR-Finder, Bioinformatics, Volume 40, Issue 12, December 2024, btae733, https://doi.org/10.1093/bioinformatics/btae733
