@@ -1,6 +1,13 @@
 # Issues
 CDR-Finder may fail to correctly call the correct regions. Choosing the correct set of parameters may fix similar scenarios.
 
+Examples:
+1. [Pericentromeric/centromeric transition regions](#pericentromericcentromeric-transition-regions)
+2. [Low, uniform average methylation percent](#low-uniform-average-methylation-percent)
+3. [Smaller dip regions](#smaller-dip-regions)
+4. [Missing non-prominent CDRs](#missing-non-prominent-cdrs)
+5. [Scaling by average methylation percent](#scaling-by-average-methylation-percent)
+
 ### Pericentromeric/centromeric transition regions
 Regions on the edges may get falsely called due to rapid changes in methylation.
 ![](issues/HG00268_haplotype2-0000071.png)
@@ -14,7 +21,7 @@ Increasing `height_perc_valley_threshold` and `window_size` may reduce these cas
 ### Low, uniform average methylation percent
 Low and uniform average methylation percent may result in false calls.
 
-With a `prom_perc_valley_threshold` of `0.2` and default parameters..
+With a `prom_perc_valley_threshold` of `0.2` and default parameters.
 ![](issues/NA19331_haplotype1-0000011_prom0.2.png)
 
 
@@ -46,3 +53,24 @@ Extend until the mean.
 
 Extend until the 1 stdev below the mean.
 ![](issues/HG00731_haplotype2-0000044_ext-1.png)
+
+### Scaling by average methylation percent
+With centromeres like chr11 with low average methylation percent, the parameter `baseline_avg_methyl` can help in reducing false-positives without manual parameter adjusting.
+This will scale the height and prominence thresholds based on the ratio of the average methyl percent and the given baseline.
+
+Default Thresholds
+![](issues/HG03009_haplotype1-0000003.png)
+
+New Thresholds
+![](issues/HG03009_haplotype1-0000003_scaled.png)
+
+* The average methyl coverage is 0.2
+* The `baseline_avg_methyl` is 0.4
+* Thresholds:
+    * `height_perc_valley_threshold` is 0.34
+    * `prom_perc_valley_threshold` is 0.3
+* Adjustment factor:
+    * `0.4 / 0.2 = 2`
+* New thresholds:
+    * `height_perc_valley_threshold` is 0.68
+    * `prom_perc_valley_threshold` is 0.6

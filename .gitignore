@@ -2,6 +2,7 @@
 results/
 logs/
 benchmarks/
+exp
 
 RM*/
 .RepeatMaskerCache/
