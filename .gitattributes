@@ -10,3 +10,4 @@ test/cdr/input/HG00731_intersect.bed filter=lfs diff=lfs merge=lfs -text
 test/cdr/input/NA19331_intersect.bed filter=lfs diff=lfs merge=lfs -text
 test/cdr/expected/NA19331_cdr.bed filter=lfs diff=lfs merge=lfs -text
 test/cdr/expected/CHM13_cdr_chr8_params.bed filter=lfs diff=lfs merge=lfs -text
+test/cdr/expected/HG00731_cdr_ext.bed filter=lfs diff=lfs merge=lfs -text
