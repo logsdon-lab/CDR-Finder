@@ -1,9 +1,6 @@
 from os.path import join
 
 
-configfile: "config.yaml"
-
-
 include: "rules/utils.smk"
 
 
@@ -16,13 +13,15 @@ MANIFEST = config["samples"]
 # CDR and other
 WINDOW = config["window_size"]
 ALR_THRESHOLD = config.get("alr_threshold", 100000)
-BP_MERGE = config.get("bp_merge", 1)
+BP_MERGE = config.get("bp_merge")
 BP_EDGE = config.get("bp_edge", 500_000)
 EXTEND_EDGES_STD = config.get("extend_edges_std", -1)
 BP_ALR_MERGE = config.get("bp_alr_merge", 1000)
 HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.34)
 PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
 EDGE_HEIGHT_HEURISTIC = config.get("edge_height_heuristic", "min")
+BASELINE_AVG_METHYL = config.get("baseline_avg_methyl", 0.4)
+RESTRICT_ALR = config.get("restrict_alr", True)
 
 # Workflow params
 OUTPUT_DIR = config.get("output_dir", "results")
@@ -334,7 +333,7 @@ rule call_cdrs:
         script=workflow.source_path("scripts/cdr_finder.py"),
         methyl_bed=(
             rules.intersect_RM.output.intersect_bed
-            if config.get("restrict_alr")
+            if RESTRICT_ALR
             else rules.add_target_bed_coords_windows.output
         ),
         override_chrom_params=lambda wc: (
@@ -369,6 +368,11 @@ rule call_cdrs:
             if input.override_chrom_params
             else ""
         ),
+        baseline_avg_methyl=(
+            f"--baseline_avg_methyl {BASELINE_AVG_METHYL}"
+            if BASELINE_AVG_METHYL
+            else ""
+        )
     conda:
         "envs/python.yaml"
     threads: 1
@@ -379,8 +383,11 @@ rule call_cdrs:
         --thr_height_perc_valley {params.thr_height_perc_valley} \
         --bp_edge {params.bp_edge} \
         --edge_height_heuristic {params.edge_height_heuristic} \
-        {params.bp_merge} {params.thr_prom_perc_valley} \
-        {params.extend_edges_std} {params.override_chrom_params} > {output} 2> {log}
+        {params.bp_merge} \
+        {params.thr_prom_perc_valley} \
+        {params.extend_edges_std} \
+        {params.override_chrom_params} \
+        {params.baseline_avg_methyl} > {output} 2> {log}
         """
 
 

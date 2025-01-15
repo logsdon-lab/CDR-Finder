@@ -27,6 +27,18 @@ height_perc_valley_threshold: 0.34
 
 prom_perc_valley_threshold: 0.3
 
+# Baseline average methylation per centromere.
+# Adjusts height_perc_valley_threshold and prom_perc_valley_threshold based on avg methyl coverage relative to baseline.
+# Will only increase thresholds and never reduce them.
+# Reduces false positives in centromeres with low methylation relative to coverage.
+# ex.
+#   avg methyl coverage is 0.2
+#   methyl_avg_baseline is 0.4
+#   0.4 / 0.2 = 2
+#   thresholds will be multiplied by 2
+# Can be omitted.
+baseline_avg_methyl: 0.4
+
 bp_alr_merge: 1000
 
 bp_edge: 500000

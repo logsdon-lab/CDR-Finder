@@ -72,7 +72,7 @@ def main():
         "--bp_edge",
         type=int,
         default=5_000,
-        help="Bases to look on both edges of cdr to determine effective height.",
+        help="Bases to look on both edges of cdr to determine relative height.",
     )
     ap.add_argument(
         "--extend_edges_std",
@@ -86,6 +86,19 @@ def main():
         choices=["min", "max", "avg"],
         default="min",
         help="Heuristic used to determine edge height of CDR.",
+    )
+    ap.add_argument(
+        "--baseline_avg_methyl",
+        type=float,
+        default=0.4,
+        help=" ".join(
+            [
+                "Average methylation baseline used to scale thresholds in cases of low coverage.",
+                "If average methylation is below baseline, multiplies threshold by the ratio in methylation. (baseline / avg_methyl)",
+                "Will only increase threshold.",
+                "Reduces false positives when low average methylation coverage.",
+            ]
+        ),
     )
     ap.add_argument(
         "--override_chrom_params",
@@ -126,6 +139,9 @@ def main():
             "extend_edges_std", args.extend_edges_std
         )
         bp_merge = override_params.get(chrom, {}).get("bp_merge", args.bp_merge)
+        baseline_avg_methyl = override_params.get(chrom, {}).get(
+            "baseline_avg_methyl", args.baseline_avg_methyl * 100
+        )
 
         # Group adjacent, contiguous intervals.
         df_chr_methyl_adj_groups = (
@@ -142,11 +158,20 @@ def main():
         )
         avg_methyl_median = df_chr_methyl["avg"].median()
         avg_methyl_mean = df_chr_methyl["avg"].mean()
+        # Threshold scaling factor. Will always be at least 1.
+        # Reduces false positives when mean avg methylation is low.
+        thr_scaling_factor = max(
+            baseline_avg_methyl / avg_methyl_mean if baseline_avg_methyl else 1, 1
+        )
         avg_methyl_std = df_chr_methyl["avg"].std()
         cdr_prom_thr = (
-            avg_methyl_median * thr_prom_perc_valley if thr_prom_perc_valley else None
+            (avg_methyl_median * thr_prom_perc_valley) * thr_scaling_factor
+            if thr_prom_perc_valley
+            else None
         )
-        cdr_height_thr = avg_methyl_median * thr_height_perc_valley
+        cdr_height_thr = (
+            avg_methyl_median * thr_height_perc_valley
+        ) * thr_scaling_factor
         print(
             f"Using CDR height threshold of {cdr_height_thr} and prominence threshold of {cdr_prom_thr} for {chrom}.",
             file=sys.stderr,
@@ -254,7 +279,8 @@ def main():
                 if bp_merge:
                     cdr_st = cdr_st - bp_merge
                     cdr_end = cdr_end + bp_merge
-
+                # Trim overlaps.
+                cdr_intervals[chrom].chop(cdr_st, cdr_end)
                 cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
 
     # Merge overlaps and output.
