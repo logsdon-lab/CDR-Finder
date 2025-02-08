@@ -57,8 +57,7 @@ jobs:
 
     - name: Test run chr8 and chr21 workflow.
       run: |
-        snakemake -c 2 -p \
-        --sdm apptainer conda \
+        snakemake -c 4 -p \
+        --sdm conda \
         --configfile test/config/config.yaml \
-        --show-failed-logs \
-        --apptainer-args "--bind $HOME:$HOME"
+        --show-failed-logs
