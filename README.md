@@ -84,9 +84,6 @@ Multiple samples can be provided via the configfile. Each sample should contain 
     * https://github.com/epi2me-labs/modbam2bed?tab=readme-ov-file#usage
 - `regions`
     * BED file of target region coordinates.
-- `titles`
-    * Optional
-    * Two column TSV file with chrom name and plot title name.
 - `override_chrom_params`
     * Optional
     * JSON file with chrom specific parameters that override defaults specified. See `python workflow/scripts/cdr_finder.py -h` for parameter list.
@@ -98,7 +95,10 @@ Multiple samples can be provided via the configfile. Each sample should contain 
     * `{config.output_dir}/bed/{sample}_CDR.bed`
 - `cdr_plot`
     * CDR regions plotted with RepeatMasker annotations.
-    * `{config.output_dir}/plot/{sample}_CDR.png`
+    * `{config.output_dir}/plot/{sample}/{ctg}.png`
+    * To change the layout or text of the plot, modify the [`cenplot`](https://github.com/logsdon-lab/cenplot) track TOML file.:
+        * `{config.output_dir}/plot/{sample}/{ctg}_plot_layout.toml`
+        * `cenplot draw -t results/plot/${sm}/${ctg}_plot_layout.toml -c <(echo ${ctg}) -d results/plot/${sm}/`
 
 ## Parameters
 |parameter|description|default|
@@ -134,6 +134,16 @@ snakemake -c 1 -p --sdm conda --configfile test/config/config.yaml
 To run integration tests.
 ```bash
 pytest -vvv
+```
+
+To replicate the README image, run the test case. And then run the following:
+```bash
+# Replace title
+sed -i 's/title = "{chrom}"/title = "CHM13 chromosome 8 centromere"/g' results/plot/CHM13/chr8_plot_layout.toml
+# Get cenplot conda env
+conda activate $(grep -l "cenplot" .snakemake/conda/*.yaml | xargs echo | sed 's/.yaml//g')
+# Draw image again.
+cenplot draw -t results/plot/CHM13/chr8_plot_layout.toml -c <(echo chr8) -d results/plot/CHM13/readme
 ```
 
 ## Containerization

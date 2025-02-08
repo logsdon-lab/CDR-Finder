@@ -1,0 +1,52 @@
+# Template layout. Do not modify.
+[settings]
+title = "{chrom}"
+format = "png"
+transparent = false
+dim = [16.0, 6.0]
+dpi = 600
+axis_h_pad = 0.1
+legend_prop = 0.05
+layout = "tight"
+
+[[tracks]]
+position = "relative"
+type = "label"
+proportion = 0.01
+path = "{outdir}/cdr.bed"
+options = { legend = false, hide_x = true, color = "black" }
+
+[[tracks]]
+position = "relative"
+type = "label"
+proportion = 0.025
+path = "{outdir}/rm.bed"
+options = { legend = true, legend_title = "Sequence composition", legend_title_fontsize="large", legend_ncols = 1, hide_x = true, border = true }
+
+[[tracks]]
+title = "Mean CpG\nmethylation\n(%)"
+position = "relative"
+type = "bar"
+proportion = 0.1
+path = "{outdir}/methyl_avg_cov.bed"
+options = { hide_x = true, color = "black", ymax = 100 }
+
+[[tracks]]
+position = "overlap"
+type = "label"
+path = "{outdir}/cdr.bed"
+options = { legend = false, hide_x = true, color = "red", alpha = 0.34 }
+
+[[tracks]]
+title = "Coverage\n(x)"
+position = "relative"
+type = "bar"
+proportion = 0.1
+path = "{outdir}/cov.bed"
+options = { legend = true, legend_title = "Coverage", legend_ncols = 1, hide_x = false, color = "blue", label = "Total" }
+
+[[tracks]]
+position = "overlap"
+type = "bar"
+path = "{outdir}/methyl_cov.bed"
+options = { legend = true, legend_title = "Coverage", legend_ncols = 1, hide_x = false, color = "red", label = "Methylated" }

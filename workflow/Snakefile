@@ -1,4 +1,4 @@
-from os.path import join
+from os.path import join, dirname
 
 
 include: "rules/utils.smk"
@@ -27,9 +27,6 @@ RESTRICT_ALR = config.get("restrict_alr", True)
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
-
-# Plot params
-ADD_HBAR = config.get("add_hbar", True)
 
 
 wildcard_constraints:
@@ -306,7 +303,6 @@ rule intersect_RM:
         binned_freq=rules.add_target_bed_coords_windows.output,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
-        merged=join(OUTPUT_DIR, "bed", "{sample}_rm_merged.bed"),
     log:
         join(LOG_DIR, "intersect_RM_{sample}.log"),
     benchmark:
@@ -317,18 +313,19 @@ rule intersect_RM:
     params:
         alr_threshold=ALR_THRESHOLD,
         bp_alr_merge=BP_ALR_MERGE,
+        merge_interm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_merged.bed"),
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
         {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
-        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {output.merged} 2> {log}
-        bedtools intersect -a {input.binned_freq} -b {output.merged} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
+        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {params.merge_interm_bed} 2> {log}
+        bedtools intersect -a {input.binned_freq} -b {params.merge_interm_bed} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
         """
 
 
-rule call_cdrs:
+checkpoint call_cdrs:
     input:
         script=workflow.source_path("scripts/cdr_finder.py"),
         methyl_bed=(
@@ -372,7 +369,7 @@ rule call_cdrs:
             f"--baseline_avg_methyl {BASELINE_AVG_METHYL}"
             if BASELINE_AVG_METHYL
             else ""
-        )
+        ),
     conda:
         "envs/python.yaml"
     threads: 1
@@ -391,41 +388,87 @@ rule call_cdrs:
         """
 
 
-rule plot_cdr:
+rule format_files_for_cenplot:
     input:
-        script=workflow.source_path("scripts/plot_cdr.R"),
+        script="workflow/scripts/format_files_for_cenplot.py",
+        plot_layout="workflow/scripts/plot_layout.toml",
         binned_freq_bed=rules.add_target_bed_coords_windows.output,
         cdr_bed=rules.call_cdrs.output,
         rm_bed=rules.add_target_bed_coords_rm.output,
-        titles=lambda wc: MANIFEST[wc.sample].get("titles", []),
     output:
-        directory(join(OUTPUT_DIR, "plot", "{sample}")),
-    log:
-        join(LOG_DIR, "plot_cdr_{sample}.log"),
+        cdr_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cdr.bed"),
+        cov_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cov.bed"),
+        methyl_cov_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "methyl_cov.bed"),
+        methyl_avg_cov_bed=join(
+            OUTPUT_DIR, "bed", "{sample}", "{ctg}", "methyl_avg_cov.bed"
+        ),
+        rm_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "rm.bed"),
+        plot_layout=join(OUTPUT_DIR, "plot", "{sample}", "{ctg}_plot_layout.toml"),
+    conda:
+        "envs/python.yaml"
     params:
-        add_hbar="--add_hbar" if ADD_HBAR else "",
-        titles=lambda wc, input: f"--titles {input.titles}" if input.titles else "",
+        outdir=lambda wc, output: dirname(dirname(output.cdr_bed)),
+        esc_outdir=lambda wc, output: dirname(output.cdr_bed).replace("/", "\\/"),
+    log:
+        join(LOG_DIR, "format_files_for_cenplot_{sample}_{ctg}.log"),
+    shell:
+        """
+        python {input.script} \
+        --ctg {wildcards.ctg} \
+        --bed_binned_freq {input.binned_freq_bed} \
+        --bed_cdr {input.cdr_bed} \
+        --bed_rm {input.rm_bed} \
+        --outdir {params.outdir} 2> {log}
+        # Replace outdir format string with outdir
+        sed 's/{{outdir}}/{params.esc_outdir}/g' {input.plot_layout} > {output.plot_layout} 2> {log}
+        """
+
+
+rule plot_cdr:
+    input:
+        plot_layout=rules.format_files_for_cenplot.output.plot_layout,
+    output:
+        join(OUTPUT_DIR, "plot", "{sample}", "{ctg}.png"),
+    log:
+        join(LOG_DIR, "plot_cdr_{sample}_{ctg}.log"),
     benchmark:
-        join(BMK_DIR, "plot_cdr_{sample}.tsv")
+        join(BMK_DIR, "plot_cdr_{sample}_{ctg}.tsv")
+    params:
+        outdir=lambda wc, output: dirname(output[0]),
     resources:
         mem=8,
         hrs=1,
     conda:
-        "envs/r.yaml"
+        "envs/python.yaml"
     shell:
         """
-        Rscript {input.script} \
-        --input_methyl {input.binned_freq_bed} \
-        --input_rm {input.rm_bed} \
-        --input_cdr {input.cdr_bed} \
-        --output_dir {output} \
-        {params.titles} \
-        {params.add_hbar} 2> {log}
+        cenplot draw -t {input.plot_layout} -c <(echo {wildcards.ctg}) -d {params.outdir} -p 1 2> {log}
         """
+
+
+def all_cdr_plots(wc):
+    cdr_file = checkpoints.call_cdrs.get(**wc).output[0]
+    ctgs = set()
+    with open(cdr_file, "rt") as fh:
+        for line in fh.readlines():
+            ctg, *_ = line.strip().split("\t")
+            ctgs.add(ctg)
+
+    wildcard_constraints:
+        ctg="|".join(ctgs),
+
+    return expand(rules.plot_cdr.output, sample=wc.sample, ctg=ctgs)
+
+
+rule cdr_plots:
+    input:
+        all_cdr_plots,
+    output:
+        touch(join(OUTPUT_DIR, "plot", "{sample}.done")),
 
 
 rule all:
     input:
         expand(rules.call_cdrs.output, sample=MANIFEST.keys()),
-        expand(rules.plot_cdr.output, sample=MANIFEST.keys()),
+        expand(rules.cdr_plots.output, sample=MANIFEST.keys()),
     default_target: True

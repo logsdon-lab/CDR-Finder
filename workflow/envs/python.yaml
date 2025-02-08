@@ -2,7 +2,9 @@ channels:
   - conda-forge
 dependencies:
   - python==3.12
+  - pip
   - pip:
     - intervaltree==3.1.0
-    - polars==0.20.31
+    - polars==1.19.0
     - scipy==1.14.1
+    - cenplot==0.0.1
