@@ -36,7 +36,7 @@ jobs:
         key:
           conda-${{ runner.os }}--${{ runner.arch }}--${{
           steps.get-date.outputs.today }}-${{
-          hashFiles('test/env_dev.yaml') }}-${{ env.CACHE_NUMBER }}
+          hashFiles('env.yaml') }}-${{ env.CACHE_NUMBER }}
       env:
         # Increase this value to reset cache if etc/example-environment.yml has not changed
         CACHE_NUMBER: 0
@@ -44,7 +44,7 @@ jobs:
 
     - name: Update environment.
       run:
-        conda env update -n smk -f env.yaml
+        conda env update -n smk -f 'env.yaml'
       if: steps.cache.outputs.cache-hit != 'true'
 
     - name: Test can generate Dockerfile.
