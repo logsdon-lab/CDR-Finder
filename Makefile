@@ -1,4 +1,4 @@
-.PHONY: docker clean
+.PHONY: docker dockerfile docker-upload singularity clean
 
 ORG := "logsdonlab"
 PROJECT_NAME := "cdr-finder"
@@ -8,6 +8,9 @@ TAG_NAME := "${REPO}:${VERSION}"
 
 clean:
 	rm -rf .snakemake/ results/ logs/ benchmarks/
+
+dockerfile:
+	snakemake -p -c 1 --sdm apptainer --configfile test/config/config.yaml --containerize > Dockerfile
 
 docker:
 	snakemake -p -c 1 --sdm apptainer --configfile test/config/config.yaml --containerize | \
