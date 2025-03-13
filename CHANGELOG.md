@@ -1,4 +1,18 @@
-# Changes
+# Changes (March 9, 2025)
+* Changed peak calling behavior.
+    * Using relative proportion of dips is **intuitive but can be difficult to explain**.
+        * Switch to z-scores, the distance from the mean in standard deviations.
+        * We assume reads are normally distribution in evaluated regions.
+    * The relative proportion also had issues as it **required determining a variable, relative height**.
+        * Depending on `bp_edges` and the deviation in methylation, this relative height could be inflated.
+    * Operating per bin and using a standardized threshold across the entire region resolves many of these issues.
+* Add 1D sequence similarity as track and a method to reduce false-positives.
+    * Previous iterations of CDR-Finder could achieve ~90% TP rate.
+    * The remaining false-positives resided in pericentromeric regions with high variability in methylation and repeat type.
+        * Mostly due to transposable elements interspersed in alpha-satellite repeats.
+    * Because of this variability, sequence identity drops rapidly and can be used to restrict evaluated ALR regions.
+
+# Changes (August 18, 2024)
 * Added basic test files with Git LFS
 * Added plot cdr R script.
 * Added output, log, and benchmark dir.

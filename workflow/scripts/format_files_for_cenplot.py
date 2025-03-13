@@ -1,6 +1,48 @@
 import os
 import argparse
+import itertools
 import polars as pl
+
+IDENT_CUTOFF = 97.5
+IDENT_INCREMENT = 0.25
+IDENT_COLORS = [
+    "#4b3991",
+    "#2974af",
+    "#4a9da8",
+    "#57b894",
+    "#9dd893",
+    "#e1f686",
+    "#ffffb2",
+    "#fdda79",
+    "#fb9e4f",
+    "#ee5634",
+    "#c9273e",
+    "#8a0033",
+]
+
+IDENT_RANGE_ENDS = tuple(
+    # Increment by IDENT_INCREMENT from IDENT_CUTOFF up to 100%
+    i + IDENT_CUTOFF
+    for i in itertools.accumulate(IDENT_INCREMENT for _ in range(10))
+)
+IDENT_RANGE = [
+    (0, 90),
+    (90, 97.5),
+    *zip((IDENT_CUTOFF, *IDENT_RANGE_ENDS[:-1]), IDENT_RANGE_ENDS),
+]
+
+IDENT_COLOR_RANGE: dict[tuple[float, float], str] = dict(zip(IDENT_RANGE, IDENT_COLORS))
+BED9_COLS = [
+    "chrom",
+    "chrom_st",
+    "chrom_end",
+    "name",
+    "score",
+    "strand",
+    "thick_chrom_st",
+    "thick_chrom_end",
+    "color",
+]
 
 
 def main():
@@ -15,6 +57,7 @@ def main():
     ap.add_argument(
         "--bed_rm", required=True, help="Bedfile for repeatmasker annotations."
     )
+    ap.add_argument("--bed_ident", required=True, help="Bedfile for self-identity.")
     ap.add_argument("--outdir", required=True, help="Output directory.")
 
     args = ap.parse_args()
@@ -98,17 +141,40 @@ def main():
     df_rm_all.filter(pl.col("chrom") == args.ctg).with_columns(
         thick_chrom_st=pl.col("chrom_st"),
         thick_chrom_end=pl.col("chrom_end"),
-    ).select(
-        "chrom",
-        "chrom_st",
-        "chrom_end",
-        "name",
-        0,
-        "strand",
-        "thick_chrom_st",
-        "thick_chrom_end",
-        "color",
-    ).write_csv(os.path.join(outdir, "rm.bed"), separator="\t", include_header=False)
+        score=pl.lit(0),
+    ).select(BED9_COLS).write_csv(
+        os.path.join(outdir, "rm.bed"), separator="\t", include_header=False
+    )
+
+    df_self_ident = pl.read_csv(
+        args.bed_ident,
+        separator="\t",
+        has_header=False,
+        new_columns=["chrom", "chrom_st", "chrom_end", "score"],
+    )
+    # Build expr
+    expr_colors = None
+    for (rng_st, rng_end), color in IDENT_COLOR_RANGE.items():
+        rng_name = f"{rng_st}% - {rng_end}%"
+        color_name = pl.lit(f"{color}_{rng_name}")
+        expr_in_rng = pl.col("score").is_between(rng_st, rng_end)
+        if isinstance(expr_colors, pl.Expr):
+            expr_colors = expr_colors.when(expr_in_rng).then(color_name)
+        else:
+            expr_colors = pl.when(expr_in_rng).then(color_name)
+
+    df_self_ident = df_self_ident.with_columns(
+        strand=pl.lit("+"),
+        thick_chrom_st=pl.col("chrom_st"),
+        thick_chrom_end=pl.col("chrom_end"),
+        color_name=expr_colors.otherwise(pl.lit("white_none"))
+        .str.split_exact("_", 1)
+        .struct.rename_fields(["color", "name"]),
+    ).unnest("color_name")
+
+    df_self_ident.select(BED9_COLS).write_csv(
+        os.path.join(outdir, "ident.bed"), separator="\t", include_header=False
+    )
 
 
 if __name__ == "__main__":

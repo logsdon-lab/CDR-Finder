@@ -3,11 +3,18 @@
 title = "{chrom}"
 format = "png"
 transparent = false
-dim = [16.0, 6.0]
+dim = [18.0, 8.0]
 dpi = 600
-axis_h_pad = 0.1
+axis_h_pad = 0.2
 legend_prop = 0.05
 layout = "tight"
+
+[[tracks]]
+position = "relative"
+type = "label"
+proportion = 0.025
+path = "{outdir}/ident.bed"
+options = { legend = true, legend_title = "Sequence identity", legend_title_fontsize="large", legend_ncols = 3, hide_x = true, border = true }
 
 [[tracks]]
 position = "relative"
@@ -21,7 +28,7 @@ position = "relative"
 type = "label"
 proportion = 0.025
 path = "{outdir}/rm.bed"
-options = { legend = true, legend_title = "Sequence composition", legend_title_fontsize="large", legend_ncols = 1, hide_x = true, border = true }
+options = { legend = true, legend_title = "Sequence composition", legend_title_fontsize="large", legend_ncols = 2, hide_x = true, border = true }
 
 [[tracks]]
 title = "Mean CpG\nmethylation\n(%)"

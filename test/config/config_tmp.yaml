@@ -1,0 +1,39 @@
+samples:
+  NA12329:
+    fasta: /project/logsdon_shared/projects/CDR-Finder/exp/asm/NA12329-asm-comb-dedup.fa
+    regions: /project/logsdon_shared/projects/CDR-Finder/exp/bed/NA12329_complete_correct_ALR_regions.og_coords.bed
+    bam: /project/logsdon_shared/projects/CDR-Finder/exp/aln/NA12329.bam
+  NA20847:
+    fasta: /project/logsdon_shared/projects/CDR-Finder/exp/asm/NA20847-asm-comb-dedup.fa
+    regions: /project/logsdon_shared/projects/CDR-Finder/exp/bed/NA20847_complete_correct_ALR_regions.og_coords.bed
+    bam: /project/logsdon_shared/projects/CDR-Finder/exp/aln/NA20847.bam
+  HG00513:
+    fasta: /project/logsdon_shared/projects/CDR-Finder/exp/asm/HG00513-asm-comb-dedup.fa
+    regions: /project/logsdon_shared/projects/CDR-Finder/exp/bed/HG00513_complete_correct_ALR_regions.og_coords.bed
+    bam: /project/logsdon_shared/projects/CDR-Finder/exp/aln/HG00513.bam
+
+# Size of the methylation windows to average over
+window_size: 5000
+
+# Size of sequence identity windows. Optional.
+window_size_ident: 5000
+
+# Number of zscore below mean to be considered dip. Optional.
+zscore_threshold: -1.5
+# zscore_threshold: -2.5
+# zscore_threshold: -3.0
+
+# Identity of regions required to evaluate. Optional.
+ident_threshold: 95.0
+
+# Minimum CDR size. Optional.
+cdr_threshold: 5000
+
+# Distance to merge adjacent CDRs. Optional.
+bp_merge: 1
+
+# Distance to merge alpha-satellite repeat annotations. Optional.
+bp_alr_merge: 5000
+
+# Container. Optional.
+container: "docker://logsdonlab/cdr-finder:latest"
