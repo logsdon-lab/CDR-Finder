@@ -227,7 +227,7 @@ rule format_filter_RM:
                 next;
             }}
             # Skip header.
-            if (NR > 5) {{
+            else if (FNR > 3) {{
                 # Replace renamed seq name with original.
                 chr_name=kv[$5]
                 # Get chr name without coordinates
