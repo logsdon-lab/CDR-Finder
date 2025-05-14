@@ -7,4 +7,4 @@ dependencies:
     - intervaltree==3.1.0
     - polars==1.19.0
     - scipy==1.14.1
-    - cenplot==0.0.1
+    - git+https://github.com/jwertz01/CenPlot.git
