@@ -4,7 +4,7 @@ from os.path import join, dirname
 include: "rules/utils.smk"
 
 
-containerized: "docker://logsdonlab/cdr-finder:latest"
+#containerized: "docker://logsdonlab/cdr-finder:latest"
 
 
 # Sample manifest dict.
