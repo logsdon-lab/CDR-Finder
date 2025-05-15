@@ -442,7 +442,7 @@ rule plot_cdr:
         "envs/python.yaml"
     shell:
         """
-        cenplot draw -t {input.plot_layout} -c <(echo {wildcards.ctg}) -d {params.outdir} -p 1 2> {log}
+        cenplot draw -t {input.plot_layout} -c {wildcards.ctg} -d {params.outdir} -p 1 2> {log}
         """
 
 
