@@ -35,7 +35,7 @@ options = { hide_x = true, color = "black", ymax = 100 }
 position = "overlap"
 type = "label"
 path = "{outdir}/cdr.bed"
-options = { legend = false, hide_x = true, color = "red", alpha = 0.34 }
+options = { legend = false, hide_x = true, color = "red", alpha = "{overlap_opacity}" }
 
 [[tracks]]
 title = "Coverage\n(x)"
