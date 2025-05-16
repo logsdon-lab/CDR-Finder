@@ -47,3 +47,6 @@ extend_edges_std: -1
 
 # Add red horizontal bar where CDR is.
 add_hbar: true
+
+# Opacity of red overlap region
+overlap_opacity: 0.34
