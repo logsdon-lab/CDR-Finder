@@ -3,10 +3,6 @@ from os.path import join, dirname
 
 include: "rules/utils.smk"
 
-
-#containerized: "docker://logsdonlab/cdr-finder:latest"
-
-
 # Sample manifest dict.
 MANIFEST = config["samples"]
 
@@ -23,12 +19,15 @@ EDGE_HEIGHT_HEURISTIC = config.get("edge_height_heuristic", "min")
 BASELINE_AVG_METHYL = config.get("baseline_avg_methyl", 0.4)
 RESTRICT_ALR = config.get("restrict_alr", True)
 OVERLAP_OPACITY = config.get("overlap_opacity", 0.34)
+CONTAINER = config.get("container", None)
 
 # Workflow params
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
 
+if CONTAINER:
+    containerized: CONTAINER
 
 wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
