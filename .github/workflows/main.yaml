@@ -19,7 +19,7 @@ jobs:
         lfs: 'true'
 
     - name: Setup Miniforge.
-      uses: conda-incubator/setup-miniconda@v3
+      uses: conda-incubator/setup-miniconda@v3.1.1
       with:
         miniforge-version: latest
         activate-environment: smk
