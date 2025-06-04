@@ -3,10 +3,6 @@ from os.path import join, dirname
 
 include: "rules/utils.smk"
 
-
-containerized: "docker://logsdonlab/cdr-finder:latest"
-
-
 # Sample manifest dict.
 MANIFEST = config["samples"]
 
@@ -22,12 +18,16 @@ PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.3)
 EDGE_HEIGHT_HEURISTIC = config.get("edge_height_heuristic", "min")
 BASELINE_AVG_METHYL = config.get("baseline_avg_methyl", 0.4)
 RESTRICT_ALR = config.get("restrict_alr", True)
+OVERLAP_OPACITY = config.get("overlap_opacity", 0.34)
+CONTAINER = config.get("container", None)
 
 # Workflow params
 OUTPUT_DIR = config.get("output_dir", "results")
 LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
 
+if CONTAINER:
+    containerized: CONTAINER
 
 wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
@@ -227,7 +227,7 @@ rule format_filter_RM:
                 next;
             }}
             # Skip header.
-            if (NR > 5) {{
+            else if (FNR > 3) {{
                 # Replace renamed seq name with original.
                 chr_name=kv[$5]
                 # Get chr name without coordinates
@@ -409,6 +409,7 @@ rule format_files_for_cenplot:
     params:
         outdir=lambda wc, output: dirname(dirname(output.cdr_bed)),
         esc_outdir=lambda wc, output: dirname(output.cdr_bed).replace("/", "\\/"),
+        overlap_opacity=OVERLAP_OPACITY
     log:
         join(LOG_DIR, "format_files_for_cenplot_{sample}_{ctg}.log"),
     shell:
@@ -420,7 +421,7 @@ rule format_files_for_cenplot:
         --bed_rm {input.rm_bed} \
         --outdir {params.outdir} 2> {log}
         # Replace outdir format string with outdir
-        sed 's/{{outdir}}/{params.esc_outdir}/g' {input.plot_layout} > {output.plot_layout} 2> {log}
+        sed -e 's/{{outdir}}/{params.esc_outdir}/g' -e 's/"{{overlap_opacity}}"/{params.overlap_opacity}/g' {input.plot_layout} > {output.plot_layout} 2> {log}
         """
 
 
@@ -442,7 +443,7 @@ rule plot_cdr:
         "envs/python.yaml"
     shell:
         """
-        cenplot draw -t {input.plot_layout} -c <(echo {wildcards.ctg}) -d {params.outdir} -p 1 2> {log}
+        cenplot draw -t {input.plot_layout} -c {wildcards.ctg} -d {params.outdir} -p 1 2> {log}
         """
 
 

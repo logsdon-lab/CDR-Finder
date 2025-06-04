@@ -8,6 +8,9 @@ samples:
 # See https://www.repeatmasker.org/genomicDatasets/RMGenomicDatasets.html
 species: "human"
 
+# Use container image globally
+container: "docker://logsdonlab/cdr-finder:latest"
+
 # Restrict to alpha-satellite repeat annotated sequence.
 # NOTE: If disabled, this will give false positives if the region is not well curated.
 restrict_alr: true
@@ -47,3 +50,6 @@ extend_edges_std: -1
 
 # Add red horizontal bar where CDR is.
 add_hbar: true
+
+# Opacity of red overlap region
+overlap_opacity: 0.34
