@@ -31,6 +31,7 @@ if CONTAINER:
 
 wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
+    ctg=r"[^\/]*"
 
 
 ###
@@ -287,7 +288,8 @@ use rule add_target_bed_coords as add_target_bed_coords_windows with:
     params:
         col_st="$2",
         col_end="$3",
-        col_add="$6",
+        # Don't add anything.
+        col_add="0",
         col_other=",$4,$5",
 
 
@@ -313,15 +315,14 @@ rule intersect_RM:
     params:
         alr_threshold=ALR_THRESHOLD,
         bp_alr_merge=BP_ALR_MERGE,
-        merge_interm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_merged.bed"),
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
         {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
-        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} > {params.merge_interm_bed} 2> {log}
-        bedtools intersect -a {input.binned_freq} -b {params.merge_interm_bed} -f 1 -wa -u > {output.intersect_bed} 2>> {log}
+        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} | \
+        bedtools intersect -a {input.binned_freq} -b - -f 1 -wa -u > {output.intersect_bed} 2>> {log}
         """
 
 
@@ -448,15 +449,13 @@ rule plot_cdr:
 
 
 def all_cdr_plots(wc):
-    cdr_file = checkpoints.call_cdrs.get(**wc).output[0]
+    _ = checkpoints.call_cdrs.get(**wc).output
+    intersect_bed = expand(rules.call_cdrs.input.methyl_bed, sample=wc.sample)[0]
     ctgs = set()
-    with open(cdr_file, "rt") as fh:
-        for line in fh.readlines():
+    with open(intersect_bed, "rt") as fh:
+        for line in fh:
             ctg, *_ = line.strip().split("\t")
             ctgs.add(ctg)
-
-    wildcard_constraints:
-        ctg="|".join(ctgs),
 
     return expand(rules.plot_cdr.output, sample=wc.sample, ctg=ctgs)
 

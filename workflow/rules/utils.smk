@@ -14,14 +14,17 @@ rule add_target_bed_coords:
         col_st="$2",
         col_end="$3",
         col_add="$4",
-        col_other="",
+        col_other="0",
     conda:
         "envs/tools.yaml"
     shell:
         """
-        {{ join -1 1 -2 1 <(sort -k 1 {input.bed}) <(sort -k 1 {input.target_bed}) | \
+        {{ join -1 1 -2 1 <(sort -k 1,1 {input.bed}) <(sort -k 1,1 {input.target_bed}) | \
         awk -v OFS="\\t" '{{
-            print $1, $2 + {params.col_add}, $3 + {params.col_add} {params.col_other}
+            col_add=({params.col_add} == 0) ? 0 : {params.col_add};
+            st = $2 + col_add;
+            end = $3 + col_add;
+            print $1, st, end {params.col_other}
         }}' | \
         sort -k 1,1 -k 2,2n;}} > {output} 2> {log}
         """

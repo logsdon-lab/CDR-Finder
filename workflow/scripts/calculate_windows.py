@@ -59,8 +59,8 @@ def bin_freq(
         if len(window_overlap) == 0:
             continue
 
-        # Use bin start/stop rather than absolute start/stop
-        bin_start, bin_stop = window.begin - start, window.end - start
+        # Use absolute start/stop
+        bin_start, bin_stop = window.begin, window.end
         perc_methyl, coverage = zip(*(i.data for i in window_overlap))
         avg_meth = round(statistics.mean(perc_methyl), 2)
         avg_cov = round(statistics.mean(coverage), 2)
@@ -86,7 +86,7 @@ def average_methyl_freq_windows(
 
     meth_intervals = defaultdict(IntervalTree)
     with open(methylation_tsv, "rt") as meth_fh:
-        for i, line in enumerate(meth_fh.readlines()):
+        for i, line in enumerate(meth_fh):
             line = line.strip().split("\t")
             try:
                 line_info = dict(zip(METH_BED_COLS, line))
