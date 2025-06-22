@@ -63,10 +63,11 @@ def main():
             .otherwise(pl.lit("#808080")),
         )
         .select("chrom", "chrom_st", "chrom_end", "name", "strand", "color")
+        .sort(by=["chrom", "chrom_st"])
     )
     # Annotate intervals between RM intervals as non-satellite.
     df_uniq_sequence = (
-        df_rm.group_by(["chrom"])
+        df_rm.group_by(["chrom"], maintain_order=True)
         .agg(chrom_st=pl.col("chrom_end"), chrom_end=pl.col("chrom_st").shift(-1))
         .explode(["chrom_st", "chrom_end"])
         .with_columns(
@@ -77,7 +78,11 @@ def main():
         .select("chrom", "chrom_st", "chrom_end", "name", "strand", "color")
         .drop_nulls()
     )
-    df_rm_all = pl.concat([df_rm, df_uniq_sequence]).sort(by=["chrom", "chrom_st"])
+    df_rm_all = (
+        pl.concat([df_rm, df_uniq_sequence])
+        .sort(by=["chrom", "chrom_st"])
+        .filter(pl.col("chrom_st") != pl.col("chrom_end"))
+    )
     # cdr_bed
     df_cdr.filter(pl.col("chrom") == args.ctg).write_csv(
         os.path.join(outdir, "cdr.bed"), separator="\t", include_header=False
