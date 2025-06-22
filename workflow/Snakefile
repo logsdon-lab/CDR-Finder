@@ -182,7 +182,7 @@ rule calc_windows:
         join(BMK_DIR, "calc_windows_{sample}.tsv")
     threads: 1
     resources:
-        mem=8,
+        mem=30,
         hrs=1,
     threads: 1
     conda:
@@ -254,7 +254,7 @@ rule intersect_RM:
         "envs/tools.yaml"
     shell:
         """
-        {{ bedtools merge -i <(grep ALR/Alpha {input.repeat_masker}) -d {params.bp_alr_merge} | \
+        {{ bedtools merge -i <(grep ALR/Alpha {input.repeat_masker} | sort -k1,1 -k2,2n) -d {params.bp_alr_merge} | \
         awk '{{if ($3-$2 > {params.alr_threshold}) print}}' | \
         bedtools intersect -a {input.binned_freq} -b - -f 1 -wa -u ;}} > {output.intersect_bed} 2>> {log}
         """
