@@ -276,23 +276,6 @@ use rule add_target_bed_coords as add_target_bed_coords_rm with:
         col_add="$7",
         col_other=",$4,$5,$6",
 
-
-use rule add_target_bed_coords as add_target_bed_coords_windows with:
-    input:
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
-        bed=rules.calc_windows.output,
-    output:
-        bed=join(OUTPUT_DIR, "bed", "{sample}_binned_freq_adj.bed"),
-    log:
-        join(LOG_DIR, "add_target_bed_coords_windows_{sample}.log"),
-    params:
-        col_st="$2",
-        col_end="$3",
-        # Don't add anything.
-        col_add="0",
-        col_other=",$4,$5",
-
-
 ###
 # Intersect RM: Merges repeatmasker bed file with 500bp slop, and only keeps those above the ALR Threshold
 #               Intersects merged ALR bed file with binned methylation frequency bedfile
@@ -302,7 +285,7 @@ use rule add_target_bed_coords as add_target_bed_coords_windows with:
 rule intersect_RM:
     input:
         repeat_masker=rules.add_target_bed_coords_rm_alr.output,
-        binned_freq=rules.add_target_bed_coords_windows.output,
+        binned_freq=rules.calc_windows.output,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
     log:
@@ -321,8 +304,8 @@ rule intersect_RM:
     shell:
         """
         {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
-        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' ;}} | \
-        bedtools intersect -a {input.binned_freq} -b - -f 1 -wa -u > {output.intersect_bed} 2>> {log}
+        awk '{{if ($3-$2 > {params.alr_threshold}) print}}' | \
+        bedtools intersect -a {input.binned_freq} -b - -f 1 -wa -u ;}} > {output.intersect_bed} 2>> {log}
         """
 
 
@@ -332,7 +315,7 @@ checkpoint call_cdrs:
         methyl_bed=(
             rules.intersect_RM.output.intersect_bed
             if RESTRICT_ALR
-            else rules.add_target_bed_coords_windows.output
+            else rules.calc_windows.output
         ),
         override_chrom_params=lambda wc: (
             MANIFEST[wc.sample]["override_chrom_params"]
@@ -393,7 +376,7 @@ rule format_files_for_cenplot:
     input:
         script=workflow.source_path("scripts/format_files_for_cenplot.py"),
         plot_layout=workflow.source_path("scripts/plot_layout.toml"),
-        binned_freq_bed=rules.add_target_bed_coords_windows.output,
+        binned_freq_bed=rules.calc_windows.output,
         cdr_bed=rules.call_cdrs.output,
         rm_bed=rules.add_target_bed_coords_rm.output,
     output:
