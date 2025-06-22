@@ -26,5 +26,6 @@ rule add_target_bed_coords:
             end = $3 + col_add;
             print $1, st, end {params.col_other}
         }}' | \
-        sort -k 1,1 -k 2,2n;}} > {output} 2> {log}
+        sort -k 1,1 -k 2,2n | \
+        uniq ;}} > {output} 2> {log}
         """
