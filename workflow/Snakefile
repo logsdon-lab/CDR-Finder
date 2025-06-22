@@ -1,8 +1,6 @@
 from os.path import join, dirname
 
 
-include: "rules/utils.smk"
-
 # Sample manifest dict.
 MANIFEST = config["samples"]
 
@@ -27,11 +25,13 @@ LOG_DIR = config.get("log_dir", "logs")
 BMK_DIR = config.get("benchmark_dir", "benchmarks")
 
 if CONTAINER:
+
     containerized: CONTAINER
+
 
 wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
-    ctg=r"[^\/]*"
+    ctg=r"[^\/]*",
 
 
 ###
@@ -44,8 +44,8 @@ rule subset_fasta:
         fasta=lambda wc: MANIFEST[wc.sample]["fasta"],
         bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
-        rm_fasta=join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta"),
-        rm_fasta_idx=join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta.fai"),
+        rm_fasta=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta")),
+        rm_fasta_idx=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta.fai")),
     log:
         join(LOG_DIR, "subset_fasta_{sample}.log"),
     resources:
@@ -111,7 +111,7 @@ rule rename_fasta:
         renamed_fasta_idx=temp(
             join(OUTPUT_DIR, "fasta", "{sample}_subset_renamed.fasta.fai")
         ),
-        rename_key=join(OUTPUT_DIR, "fasta", "{sample}_subset_rename_key.tsv"),
+        rename_key=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset_rename_key.tsv")),
     log:
         join(LOG_DIR, "rename_fasta_{sample}.log"),
     conda:
@@ -204,77 +204,28 @@ rule calc_windows:
 ###
 
 
-rule format_filter_RM:
+rule format_RM:
     input:
+        script=workflow.source_path("scripts/reformat_rm.py"),
         rm_out=rules.run_rm.output.rm_out,
         rename_key=rules.rename_fasta.output.rename_key,
     output:
         rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm.bed"),
-        rm_alr_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR.bed"),
     log:
         join(LOG_DIR, "format_filter_RM_{sample}.log"),
     resources:
         mem=8,
         hrs=1,
     conda:
-        "envs/tools.yaml"
+        "envs/python.yaml"
     threads: 1
     shell:
         """
-        awk -v OFS="\\t" '{{
-            # Read key values in first file.
-            if (FNR == NR) {{
-                kv[$1]=$2;
-                next;
-            }}
-            # Skip header.
-            else if (FNR > 3) {{
-                # Replace renamed seq name with original.
-                chr_name=kv[$5]
-                # Get chr name without coordinates
-                split(chr_name, chr_names, ":")
-                print chr_names[1], $6, $7, $10, $11, $9 > "{output.rm_bed}"
-                if ( $10 ~ "ALR" ) {{
-                    print chr_names[1], $6, $7, $10, $9
-                }}
-            }}
-        }}' {input.rename_key} {input.rm_out} > {output.rm_alr_bed} 2> {log}
+        python {input.script} \
+        -i <(awk -v OFS="\\t" '{{$1=$1; print}}' {input.rm_out}) \
+        -r {input.rename_key} > {output.rm_bed} 2> {log}
         """
 
-
-###
-# Adjust coordinates by adding back target bed coords.
-###
-use rule add_target_bed_coords as add_target_bed_coords_rm_alr with:
-    input:
-        # 3-cols
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
-        # 5-cols
-        bed=rules.format_filter_RM.output.rm_alr_bed,
-    output:
-        bed=join(OUTPUT_DIR, "bed", "{sample}_rm_ALR_adj.bed"),
-    log:
-        join(LOG_DIR, "add_target_bed_coords_rm_alr_{sample}.log"),
-    params:
-        col_st="$2",
-        col_end="$3",
-        col_add="$6",
-        col_other=",$4,$5",
-
-
-use rule add_target_bed_coords as add_target_bed_coords_rm with:
-    input:
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
-        bed=rules.format_filter_RM.output.rm_bed,
-    output:
-        bed=join(OUTPUT_DIR, "bed", "{sample}_rm_adj.bed"),
-    log:
-        join(LOG_DIR, "add_target_bed_coords_rm_{sample}.log"),
-    params:
-        col_st="$2",
-        col_end="$3",
-        col_add="$7",
-        col_other=",$4,$5,$6",
 
 ###
 # Intersect RM: Merges repeatmasker bed file with 500bp slop, and only keeps those above the ALR Threshold
@@ -284,7 +235,7 @@ use rule add_target_bed_coords as add_target_bed_coords_rm with:
 
 rule intersect_RM:
     input:
-        repeat_masker=rules.add_target_bed_coords_rm_alr.output,
+        repeat_masker=rules.format_RM.output,
         binned_freq=rules.calc_windows.output,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
@@ -303,7 +254,7 @@ rule intersect_RM:
         "envs/tools.yaml"
     shell:
         """
-        {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
+        {{ bedtools merge -i <(grep ALR/Alpha {input.repeat_masker}) -d {params.bp_alr_merge} | \
         awk '{{if ($3-$2 > {params.alr_threshold}) print}}' | \
         bedtools intersect -a {input.binned_freq} -b - -f 1 -wa -u ;}} > {output.intersect_bed} 2>> {log}
         """
@@ -378,7 +329,7 @@ rule format_files_for_cenplot:
         plot_layout=workflow.source_path("scripts/plot_layout.toml"),
         binned_freq_bed=rules.calc_windows.output,
         cdr_bed=rules.call_cdrs.output,
-        rm_bed=rules.add_target_bed_coords_rm.output,
+        rm_bed=rules.format_RM.output,
     output:
         cdr_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cdr.bed"),
         cov_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cov.bed"),
@@ -393,7 +344,7 @@ rule format_files_for_cenplot:
     params:
         outdir=lambda wc, output: dirname(dirname(output.cdr_bed)),
         esc_outdir=lambda wc, output: dirname(output.cdr_bed).replace("/", "\\/"),
-        overlap_opacity=OVERLAP_OPACITY
+        overlap_opacity=OVERLAP_OPACITY,
     log:
         join(LOG_DIR, "format_files_for_cenplot_{sample}_{ctg}.log"),
     shell:

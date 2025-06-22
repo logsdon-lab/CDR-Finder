@@ -45,7 +45,7 @@ def main():
             args.bed_rm,
             separator="\t",
             has_header=False,
-            new_columns=["chrom", "chrom_st", "chrom_end", "rtype", "rclass", "strand"],
+            new_columns=["chrom", "chrom_st", "chrom_end", "strand", "rtype", "rclass"],
         )
         .with_columns(
             strand=pl.when(pl.col("strand") == "C")
