@@ -92,7 +92,7 @@ rule get_methylation_bed:
         """
         samtools index {input.bam} 2> {log}
         modkit pileup {input.bam} {output.methyl_bed} \
-        --include-bed {input.region} \
+        --include-bed <(cut -f 1-3 {input.region}) \
         --threads {threads} \
         --ref {params.ref} \
         --preset {params.preset} 2>> {log}
