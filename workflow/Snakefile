@@ -31,7 +31,15 @@ if CONTAINER:
 
 wildcard_constraints:
     sample="|".join(MANIFEST.keys()),
+    fname=r"[^\/]*",
     ctg=r"[^\/]*",
+
+
+def convert_seqkit_coord_to_tsv(wc) -> str:
+    # seqkit split converts ':' to '__'
+    chrom, coords = wc.fname.split("__")
+    start, end = coords.split("-")
+    return f"{chrom}\\t{start}\\t{end}\\n"
 
 
 ###
@@ -181,11 +189,28 @@ rule run_rm:
 ###
 
 
+rule intersect_methyl_bed:
+    input:
+        methylation_tsv=rules.get_methylation_bed.output,
+    output:
+        # To make wildcard filename distinct, use - instead of _.
+        methyl_bed=temp(join(OUTPUT_DIR, "bed", "{sample}-{fname}_methyl.bed")),
+    params:
+        bed_tsv=convert_seqkit_coord_to_tsv,
+    log:
+        join(LOG_DIR, "intersect_methyl_bed_{sample}_{fname}.log"),
+    conda:
+        "envs/tools.yaml"
+    shell:
+        """
+        bedtools intersect -a {input.methylation_tsv} -b <(printf "{params.bed_tsv}") > {output.methyl_bed} 2> {log}
+        """
+
+
 rule calc_windows:
     input:
         script=workflow.source_path("scripts/calculate_windows.py"),
-        methylation_tsv=rules.get_methylation_bed.output,
-        target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
+        methylation_tsv=rules.intersect_methyl_bed.output,
     output:
         binned_freq=temp(join(OUTPUT_DIR, "bed", "{sample}_{fname}_binned_freq.bed")),
     log:
@@ -201,10 +226,11 @@ rule calc_windows:
         "envs/python.yaml"
     params:
         window_size=WINDOW,
+        bed_tsv=convert_seqkit_coord_to_tsv,
     shell:
         """
         python {input.script} \
-        --target_bed {input.target_bed} \
+        --target_bed <(printf "{params.bed_tsv}") \
         --methylation_tsv {input.methylation_tsv} \
         --window_size {params.window_size} \
         -p {threads} > {output} 2> {log}
@@ -215,13 +241,6 @@ rule calc_windows:
 # Format RM: Converts Repeatmasker output to bedfile and extracts only ALR annotations
 # Otherwise, use user-provided RepeatMasker
 ###
-
-
-def convert_seqkit_coord_to_tsv(wc) -> str:
-    # seqkit split converts ':' to '__'
-    chrom, coords = wc.fname.split("__")
-    start, end = coords.split("-")
-    return f"{chrom}\\t{start}\\t{end}\\n"
 
 
 rule intersect_user_rm_output:

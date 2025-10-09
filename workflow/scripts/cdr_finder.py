@@ -289,12 +289,13 @@ def main():
                     except pl.exceptions.OutOfBoundsError:
                         cdr_end = cdr_end
 
+                cdr_intervals[chrom].chop(cdr_st, cdr_end)
+                
                 # Add merge distance bp.
                 if bp_merge:
                     cdr_st = cdr_st - bp_merge
                     cdr_end = cdr_end + bp_merge
                 # Trim overlaps.
-                cdr_intervals[chrom].chop(cdr_st, cdr_end)
                 itv_cdr = Interval(cdr_st, cdr_end)
                 cdr_intervals[chrom].add(itv_cdr)
 
@@ -362,7 +363,7 @@ def main():
                 file=sys.stderr,
             )
 
-        for cdr in cdrs.iter():
+        for cdr in sorted(cdrs.iter()):
             cdr_st, cdr_end = cdr.begin, cdr.end
             if bp_merge:
                 cdr_st += bp_merge

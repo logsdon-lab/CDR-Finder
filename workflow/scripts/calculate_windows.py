@@ -6,7 +6,7 @@ import itertools
 import multiprocessing as mp
 
 from collections import defaultdict
-from typing import Generator
+from typing import Generator, TextIO
 from intervaltree import IntervalTree, Interval
 
 
@@ -72,39 +72,37 @@ def bin_freq(
 
 
 def average_methyl_freq_windows(
-    target_bed: str, methylation_tsv: str, processes: int, window_size: int
+    target_bed: TextIO, methylation_tsv: TextIO, processes: int, window_size: int
 ) -> Generator[tuple[str, int, int, float, int], None, None]:
     """
     Average methylation frequency across a given window size and target region.
     """
-    with open(target_bed, "rt") as bed_fh:
-        target_regions = []
-        for line in bed_fh.readlines():
-            chrom, start, stop, *_ = line.strip().split("\t")
-            start, stop = int(start), int(stop)
-            target_regions.append((chrom, start, stop))
+    target_regions = []
+    for line in target_bed:
+        chrom, start, stop, *_ = line.strip().split("\t")
+        start, stop = int(start), int(stop)
+        target_regions.append((chrom, start, stop))
 
     meth_intervals = defaultdict(IntervalTree)
-    with open(methylation_tsv, "rt") as meth_fh:
-        for i, line in enumerate(meth_fh):
-            line = line.strip().split("\t")
-            try:
-                line_info = dict(zip(METH_BED_COLS, line))
+    for i, line in enumerate(methylation_tsv):
+        line = line.strip().split("\t")
+        try:
+            line_info = dict(zip(METH_BED_COLS, line))
 
-                # Check for nans and set to zero.
-                freq = float(line_info["freq"])
-                if math.isnan(freq):
-                    freq = 0.0
+            # Check for nans and set to zero.
+            freq = float(line_info["freq"])
+            if math.isnan(freq):
+                freq = 0.0
 
-                interval = Interval(
-                    int(line_info["start"]),
-                    int(line_info["end"]),
-                    (freq, int(line_info["coverage"])),
-                )
-                meth_intervals[line_info["chrom"]].add(interval)
-            except ValueError:
-                sys.stderr.write(f"Line {i} in {methylation_tsv} is invalid: {line}\n")
-                continue
+            interval = Interval(
+                int(line_info["start"]),
+                int(line_info["end"]),
+                (freq, int(line_info["coverage"])),
+            )
+            meth_intervals[line_info["chrom"]].add(interval)
+        except ValueError:
+            sys.stderr.write(f"Line {i} in {methylation_tsv} is invalid: {line}\n")
+            continue
 
     sys.stderr.write(
         f"Using {processes} process(es) for {len(target_regions)} regions.\n"
@@ -134,14 +132,14 @@ def main() -> None:
         "-b",
         "--target_bed",
         required=True,
-        type=str,
+        type=argparse.FileType("rt"),
         help="Regions to average methylation over.",
     )
     ap.add_argument(
         "-m",
         "--methylation_tsv",
         required=True,
-        type=str,
+        type=argparse.FileType("rt"),
         help="Methylation bed from modbam2bed.",
     )
     ap.add_argument(

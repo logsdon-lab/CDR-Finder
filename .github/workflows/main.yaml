@@ -61,4 +61,12 @@ jobs:
         --sdm conda \
         --conda-frontend conda \
         --configfile test/config/config.yaml \
-        --show-failed-logs
+        --show-failed-logs && rm -rf results
+
+    - name: Test run chr8 and chr21 workflow using provided RM output.
+      run: |
+        snakemake -c 4 -p \
+        --sdm conda \
+        --conda-frontend conda \
+        --configfile test/config/config_provide_rm.yaml \
+        --show-failed-logs && rm -rf results
