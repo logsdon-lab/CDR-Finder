@@ -1,3 +1,4 @@
+import os
 import sys
 import math
 import json
@@ -6,7 +7,10 @@ import statistics
 from collections import defaultdict
 from typing import Iterable
 
+import matplotlib.axes
 import polars as pl
+import matplotlib.pyplot as plt
+
 from scipy import signal
 from intervaltree import Interval, IntervalTree
 
@@ -106,6 +110,12 @@ def main():
         default=None,
         help="JSON file with params per chromosome name to override default settings. Each parameter name should match.",
     )
+    ap.add_argument(
+        "--output_plot_dir",
+        help="Output debug plots per chrom.",
+        type=str,
+        default=None,
+    )
 
     args = ap.parse_args()
     df = pl.read_csv(
@@ -119,6 +129,10 @@ def main():
             override_params = json.load(fh)
     else:
         override_params = {}
+
+    output_plot_dir = args.output_plot_dir
+    if output_plot_dir:
+        os.makedirs(output_plot_dir, exist_ok=True)
 
     cdr_intervals: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
     for chrom, df_chr_methyl in df.group_by(["chrom"]):
@@ -281,7 +295,62 @@ def main():
                     cdr_end = cdr_end + bp_merge
                 # Trim overlaps.
                 cdr_intervals[chrom].chop(cdr_st, cdr_end)
-                cdr_intervals[chrom].add(Interval(cdr_st, cdr_end))
+                itv_cdr = Interval(cdr_st, cdr_end)
+                cdr_intervals[chrom].add(itv_cdr)
+
+        if output_plot_dir:
+            itvs_cdr = cdr_intervals[chrom]
+            fig, ax = plt.subplots(figsize=(16, 4), layout="constrained")
+            ax: matplotlib.axes.Axes
+            ax.fill_between(
+                x=df_chr_methyl["st"],
+                y1=df_chr_methyl["avg"],
+                color="black",
+            )
+            ax.set_xlim(
+                left=df_chr_methyl["st"].min(),
+                right=df_chr_methyl["st"].max(),
+            )
+            ax.axhline(
+                avg_methyl_median, label="Median", linestyle="dotted", color="black"
+            )
+            ax.axhline(
+                cdr_prom_thr,
+                label="Prominence threshold",
+                linestyle="dotted",
+                color="red",
+            )
+            ax.axhline(
+                cdr_height_thr,
+                label="Height threshold",
+                linestyle="dotted",
+                color="blue",
+            )
+
+            ax.set_xlabel("Position (bp)")
+            ax.set_ylabel("Average CpG methylation (%)")
+            ax.set_ylim(0.0, 100.0)
+            for cdr in itvs_cdr.iter():
+                ax.axvspan(cdr.begin, cdr.end, color="red", alpha=0.5, label="CDR")
+
+            handles, labels = ax.get_legend_handles_labels()
+            labels_handles = dict(zip(labels, handles))
+
+            for spine in ["top", "right"]:
+                ax.spines[spine].set_visible(False)
+
+            # No scientific notation
+            ax.ticklabel_format(useOffset=False, style="plain")
+            ax.legend(
+                labels=labels_handles.keys(),
+                handles=labels_handles.values(),
+                loc="center left",
+                bbox_to_anchor=(1.0, 0.5),
+            )
+
+            output_plot = os.path.join(output_plot_dir, f"{chrom}.png")
+            fig.savefig(output_plot, bbox_inches="tight", dpi=600)
+            fig.clear()
 
     # Merge overlaps and output.
     for chrom, cdrs in cdr_intervals.items():

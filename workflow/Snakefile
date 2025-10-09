@@ -35,29 +35,37 @@ wildcard_constraints:
 
 
 ###
-# Subset fasta: Extracts subsequence from target bed
+# Subset fasta: Extracts subsequence from target bed so can run RM per contig.
 ###
 
 
-rule subset_fasta:
+checkpoint subset_fasta:
     input:
         fasta=lambda wc: MANIFEST[wc.sample]["fasta"],
         bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
-        rm_fasta=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta")),
-        rm_fasta_idx=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset.fasta.fai")),
+        fasta_fofn=join(OUTPUT_DIR, "fasta", "{sample}_subset.fofn"),
     log:
         join(LOG_DIR, "subset_fasta_{sample}.log"),
     resources:
         mem=8,
         hrs=1,
+    params:
+        fasta_dir=lambda wc, output: os.path.splitext(output.fasta_fofn)[0],
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
-        bedtools getfasta -fi {input.fasta} -bed {input.bed} > {output.rm_fasta} 2> {log}
-        samtools faidx {output.rm_fasta} 2>> {log}
+        # Split fasta.
+        {{ bedtools getfasta -fi {input.fasta} -bed {input.bed} | \
+        seqkit split -i --by-id-prefix "" -O {params.fasta_dir} ;}} 2> {log}
+        # Index all fasta files and write to fofn
+        find {params.fasta_dir} -name "*.fasta" -print0 | \
+            while IFS= read -r -d '' fasta; do
+                samtools faidx "${{fasta}}"
+                echo "${{fasta}}" >> {output.fasta_fofn}
+            done
         """
 
 
@@ -79,9 +87,9 @@ rule get_methylation_bed:
         join(BMK_DIR, "get_methylation_bed_{sample}.tsv")
     params:
         preset="traditional",
-        ref=lambda wc, input: f"<(zcat {input.ref})"
-        if str(input.ref).endswith(".gz")
-        else input.ref,
+        ref=lambda wc, input: (
+            f"<(zcat {input.ref})" if str(input.ref).endswith(".gz") else input.ref
+        ),
     threads: 4
     resources:
         mem=8,
@@ -104,16 +112,20 @@ rule get_methylation_bed:
 ###
 rule rename_fasta:
     input:
-        fasta=rules.subset_fasta.output.rm_fasta,
-        fasta_idx=rules.subset_fasta.output.rm_fasta_idx,
+        fasta=join(OUTPUT_DIR, "fasta", "{sample}_subset", "{fname}.fasta"),
+        fasta_idx=join(OUTPUT_DIR, "fasta", "{sample}_subset", "{fname}.fasta.fai"),
     output:
-        renamed_fasta=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset_renamed.fasta")),
-        renamed_fasta_idx=temp(
-            join(OUTPUT_DIR, "fasta", "{sample}_subset_renamed.fasta.fai")
+        renamed_fasta=temp(
+            join(OUTPUT_DIR, "fasta", "{sample}_{fname}_subset_renamed.fasta")
         ),
-        rename_key=temp(join(OUTPUT_DIR, "fasta", "{sample}_subset_rename_key.tsv")),
+        renamed_fasta_idx=temp(
+            join(OUTPUT_DIR, "fasta", "{sample}_{fname}_subset_renamed.fasta.fai")
+        ),
+        rename_key=temp(
+            join(OUTPUT_DIR, "fasta", "{sample}_{fname}_subset_rename_key.tsv")
+        ),
     log:
-        join(LOG_DIR, "rename_fasta_{sample}.log"),
+        join(LOG_DIR, "rename_fasta_{sample}_{fname}.log"),
     conda:
         "envs/tools.yaml"
     shell:
@@ -136,12 +148,12 @@ rule run_rm:
         rm_out=join(
             OUTPUT_DIR,
             "rm",
-            "{sample}_subset_renamed.fasta.out",
+            "{sample}_{fname}_subset_renamed.fasta.out",
         ),
     log:
-        join(LOG_DIR, "run_rm_{sample}.log"),
+        join(LOG_DIR, "run_rm_{sample}_{fname}.log"),
     benchmark:
-        join(BMK_DIR, "run_rm_{sample}.tsv")
+        join(BMK_DIR, "run_rm_{sample}_{fname}.tsv")
     params:
         engine="rmblast",
         species=config.get("species", "human"),
@@ -175,11 +187,11 @@ rule calc_windows:
         methylation_tsv=rules.get_methylation_bed.output,
         target_bed=lambda wc: MANIFEST[wc.sample]["regions"],
     output:
-        binned_freq=join(OUTPUT_DIR, "bed", "{sample}_binned_freq.bed"),
+        binned_freq=temp(join(OUTPUT_DIR, "bed", "{sample}_{fname}_binned_freq.bed")),
     log:
-        join(LOG_DIR, "calc_windows_{sample}.log"),
+        join(LOG_DIR, "calc_windows_{sample}_{fname}.log"),
     benchmark:
-        join(BMK_DIR, "calc_windows_{sample}.tsv")
+        join(BMK_DIR, "calc_windows_{sample}_{fname}.tsv")
     threads: 1
     resources:
         mem=30,
@@ -201,7 +213,36 @@ rule calc_windows:
 
 ###
 # Format RM: Converts Repeatmasker output to bedfile and extracts only ALR annotations
+# Otherwise, use user-provided RepeatMasker
 ###
+
+
+def convert_seqkit_coord_to_tsv(wc) -> str:
+    # seqkit split converts ':' to '__'
+    chrom, coords = wc.fname.split("__")
+    start, end = coords.split("-")
+    return f"{chrom}\\t{start}\\t{end}\\n"
+
+
+rule intersect_user_rm_output:
+    input:
+        rm_out=lambda wc: (
+            MANIFEST[wc.sample]["repeatmasker"]
+            if MANIFEST[wc.sample].get("repeatmasker")
+            else []
+        ),
+    output:
+        rm_bed=temp(join(OUTPUT_DIR, "bed", "{sample}_{fname}_rm_user.bed")),
+    params:
+        bed_tsv=convert_seqkit_coord_to_tsv,
+    log:
+        join(LOG_DIR, "intersect_user_rm_output_{sample}_{fname}.log"),
+    conda:
+        "envs/tools.yaml"
+    shell:
+        """
+        bedtools intersect -a {input.rm_out} -b <(printf "{params.bed_tsv}") > {output.rm_bed} 2> {log}
+        """
 
 
 rule format_RM:
@@ -210,9 +251,9 @@ rule format_RM:
         rm_out=rules.run_rm.output.rm_out,
         rename_key=rules.rename_fasta.output.rename_key,
     output:
-        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm.bed"),
+        rm_bed=temp(join(OUTPUT_DIR, "bed", "{sample}_{fname}_rm.bed")),
     log:
-        join(LOG_DIR, "format_filter_RM_{sample}.log"),
+        join(LOG_DIR, "format_filter_RM_{sample}_{fname}.log"),
     resources:
         mem=8,
         hrs=1,
@@ -235,14 +276,18 @@ rule format_RM:
 
 rule intersect_RM:
     input:
-        repeat_masker=rules.format_RM.output,
+        repeat_masker=lambda wc: (
+            rules.intersect_user_rm_output.output
+            if MANIFEST[wc.sample].get("repeatmasker")
+            else rules.format_RM.output
+        ),
         binned_freq=rules.calc_windows.output,
     output:
-        intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
+        intersect_bed=temp(join(OUTPUT_DIR, "bed", "{sample}_{fname}_intersect.bed")),
     log:
-        join(LOG_DIR, "intersect_RM_{sample}.log"),
+        join(LOG_DIR, "intersect_RM_{sample}_{fname}.log"),
     benchmark:
-        join(BMK_DIR, "intersect_RM_{sample}.tsv")
+        join(BMK_DIR, "intersect_RM_{sample}_{fname}.tsv")
     resources:
         mem=8,
         hrs=1,
@@ -260,14 +305,59 @@ rule intersect_RM:
         """
 
 
+def bed_files(wc):
+    fofn = checkpoints.subset_fasta.get(**wc).output.fasta_fofn
+    fnames = []
+    with open(fofn) as fh:
+        for file in fh:
+            file = file.strip()
+            fname, ext = os.path.splitext(os.path.basename(file))
+            fnames.append(fname)
+
+    rm_out = (
+        expand(rules.format_RM.output, sample=wc.sample, fname=fnames)
+        if not MANIFEST[wc.sample].get("repeatmasker")
+        else expand(
+            rules.intersect_user_rm_output.output, sample=wc.sample, fname=fnames
+        )
+    )
+    if RESTRICT_ALR:
+        return {
+            "rm": rm_out,
+            "methyl_rgn": expand(
+                rules.intersect_RM.output, sample=wc.sample, fname=fnames
+            ),
+            "methyl": expand(rules.calc_windows.output, sample=wc.sample, fname=fnames),
+        }
+    else:
+        return {
+            "rm": rm_out,
+            "methyl_rgn": expand(
+                rules.calc_windows.output, sample=wc.sample, fname=fnames
+            ),
+            "methyl": expand(rules.calc_windows.output, sample=wc.sample, fname=fnames),
+        }
+
+
+rule aggregate_bed_files:
+    input:
+        unpack(bed_files),
+    output:
+        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_rm.bed"),
+        methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl.bed"),
+        methyl_bed_all=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl_all.bed"),
+    shell:
+        """
+        cat {input.rm} > {output.rm_bed}
+        cat {input.methyl_rgn} > {output.methyl_bed}
+        cat {input.methyl} > {output.methyl_bed_all}
+        """
+
+
 checkpoint call_cdrs:
     input:
         script=workflow.source_path("scripts/cdr_finder.py"),
-        methyl_bed=(
-            rules.intersect_RM.output.intersect_bed
-            if RESTRICT_ALR
-            else rules.calc_windows.output
-        ),
+        methyl_bed=rules.aggregate_bed_files.output.methyl_bed,
         override_chrom_params=lambda wc: (
             MANIFEST[wc.sample]["override_chrom_params"]
             if MANIFEST[wc.sample].get("override_chrom_params", [])
@@ -327,9 +417,9 @@ rule format_files_for_cenplot:
     input:
         script=workflow.source_path("scripts/format_files_for_cenplot.py"),
         plot_layout=workflow.source_path("scripts/plot_layout.toml"),
-        binned_freq_bed=rules.calc_windows.output,
+        binned_freq_bed=rules.aggregate_bed_files.output.methyl_bed_all,
         cdr_bed=rules.call_cdrs.output,
-        rm_bed=rules.format_RM.output,
+        rm_bed=rules.aggregate_bed_files.output.rm_bed,
     output:
         cdr_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cdr.bed"),
         cov_bed=join(OUTPUT_DIR, "bed", "{sample}", "{ctg}", "cov.bed"),
@@ -384,6 +474,7 @@ rule plot_cdr:
 
 def all_cdr_plots(wc):
     _ = checkpoints.call_cdrs.get(**wc).output
+    # Plot all contigs
     intersect_bed = expand(rules.call_cdrs.input.methyl_bed, sample=wc.sample)[0]
     ctgs = set()
     with open(intersect_bed, "rt") as fh:
@@ -401,8 +492,25 @@ rule cdr_plots:
         touch(join(OUTPUT_DIR, "plot", "{sample}.done")),
 
 
+rule cleanup_fasta:
+    input:
+        chkpts=[
+            expand(rules.call_cdrs.output, sample=MANIFEST.keys()),
+            expand(rules.cdr_plots.output, sample=MANIFEST.keys()),
+        ],
+        fasta_fofn=rules.subset_fasta.output,
+    output:
+        touch(join(OUTPUT_DIR, "fasta", "{sample}_cleanup.done")),
+    shell:
+        """
+        # Remove fasta and index
+        awk '{{ print $1; print $1".fai" }}' {input.fasta_fofn} | xargs rm -f
+        """
+
+
 rule all:
     input:
         expand(rules.call_cdrs.output, sample=MANIFEST.keys()),
         expand(rules.cdr_plots.output, sample=MANIFEST.keys()),
+        expand(rules.cleanup_fasta.output, sample=MANIFEST.keys()),
     default_target: True

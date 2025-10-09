@@ -74,3 +74,24 @@ New Thresholds
 * New thresholds:
     * `height_perc_valley_threshold` is 0.68
     * `prom_perc_valley_threshold` is 0.6
+
+### Debugging/Manual curation
+CDR-Finder will work optimally in human centromeres barring cases with:
+* Misassemblies
+* Non-uniform coverage
+
+To facilitate debugging, the `cdr_finder.py` script can be rerun separately and produce simple line plots to test different thresholds.
+
+```bash
+python workflow/scripts/cdr_finder.py \
+-i results/bed/CHM13_merged_methyl.bed \
+--thr_height_perc_valley 0.34 \
+--bp_edge 500000 \
+--edge_height_heuristic min \
+--bp_merge 1 \
+--thr_prom_perc_valley 0.3 \
+--baseline_avg_methyl 0.4 \
+--output_plot_dir test_params
+```
+
+![](chr8_debug.png)

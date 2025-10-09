@@ -45,20 +45,18 @@ def main():
             args.bed_rm,
             separator="\t",
             has_header=False,
-            new_columns=["chrom", "chrom_st", "chrom_end", "strand", "rtype", "rclass"],
+            new_columns=["chrom", "chrom_st", "chrom_end", "name"],
         )
         .with_columns(
-            strand=pl.when(pl.col("strand") == "C")
-            .then(pl.lit("-"))
-            .otherwise(pl.lit("+")),
-            name=pl.when(pl.col("rtype") == "ALR/Alpha")
+            strand=pl.lit("+"),
+            name=pl.when(pl.col("name") == "ALR/Alpha")
             .then(pl.lit("α-satellite"))
-            .when(pl.col("rtype").str.contains_any(hsat_repeats))
+            .when(pl.col("name").str.contains_any(hsat_repeats))
             .then(pl.lit("Human satellite"))
             .otherwise(pl.lit("Other satellite")),
-            color=pl.when(pl.col("rtype") == "ALR/Alpha")
+            color=pl.when(pl.col("name") == "ALR/Alpha")
             .then(pl.lit("#522758"))
-            .when(pl.col("rtype").str.contains_any(hsat_repeats))
+            .when(pl.col("name").str.contains_any(hsat_repeats))
             .then(pl.lit("#84bac6"))
             .otherwise(pl.lit("#808080")),
         )

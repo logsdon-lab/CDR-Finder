@@ -87,7 +87,10 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 - `override_chrom_params`
     * Optional
     * JSON file with chrom specific parameters that override defaults specified. See `python workflow/scripts/cdr_finder.py -h` for parameter list.
-
+- `repeatmasker`
+    * Optional
+    * Repeatmasker BED4 file in absolute coordinates where 4th column in repeat type (ex. `ALR/Alpha`).
+    * If provided, avoids running RepeatMasker.
 
 ## Output
 - `cdr_bed`

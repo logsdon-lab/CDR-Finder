@@ -3,8 +3,6 @@ samples:
     fasta: test/data/fa/CHM13_chr8_chr21.fa.gz
     regions: test/data/bed/CHM13_cen_500kbp.bed
     bam: test/data/bam/CHM13_chr8_chr21.bam
-    # Add plot titles
-    titles: test/data/bed/titles.tsv
 
 # Species to use for RepeatMasker
 species: "human"
