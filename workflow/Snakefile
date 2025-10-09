@@ -365,11 +365,17 @@ rule aggregate_bed_files:
         rm_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_rm.bed"),
         methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl.bed"),
         methyl_bed_all=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl_all.bed"),
+    params:
+        rm=lambda wc, input: input.rm if input.rm else "<(echo '')",
+        methyl=lambda wc, input: input.methyl if input.rm else "<(echo '')",
+        methyl_rgn=lambda wc, input: input.methyl_rgn
+        if input.methyl_rgn
+        else "<(echo '')",
     shell:
         """
-        cat {input.rm} > {output.rm_bed}
-        cat {input.methyl_rgn} > {output.methyl_bed}
-        cat {input.methyl} > {output.methyl_bed_all}
+        cat {params.rm} > {output.rm_bed}
+        cat {params.methyl_rgn} > {output.methyl_bed}
+        cat {params.methyl} > {output.methyl_bed_all}
         """
 
 
