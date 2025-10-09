@@ -362,7 +362,7 @@ def main():
                 file=sys.stderr,
             )
 
-        for cdr in cdrs.iter():
+        for cdr in sorted(cdrs.iter()):
             cdr_st, cdr_end = cdr.begin, cdr.end
             if bp_merge:
                 cdr_st += bp_merge

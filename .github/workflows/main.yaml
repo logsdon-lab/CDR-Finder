@@ -61,8 +61,7 @@ jobs:
         --sdm conda \
         --conda-frontend conda \
         --configfile test/config/config.yaml \
-        --show-failed-logs \
-        --all-temp
+        --show-failed-logs && rm -rf results
 
     - name: Test run chr8 and chr21 workflow using provided RM output.
       run: |
@@ -70,5 +69,4 @@ jobs:
         --sdm conda \
         --conda-frontend conda \
         --configfile test/config/config_provide_rm.yaml \
-        --show-failed-logs \
-        --all-temp
+        --show-failed-logs && rm -rf results
