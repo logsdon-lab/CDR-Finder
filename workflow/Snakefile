@@ -19,11 +19,13 @@ WINDOW = config["window_size"]
 WINDOW_IDENT = config.get("window_size_ident", WINDOW)
 
 CDR_THRESHOLD = config.get("cdr_threshold")
-ZSCORE_THRESHOLD = config.get("zscore_threshold")
+METHYL_SCORE_THRESHOLD = config.get("methyl_score_threshold")
+DMETHYL_SCORE_THRESHOLD = config.get("dmethyl_score_threshold")
+PLEN_SCORE_THRESHOLD = config.get("plen_score_threshold")
 IDENT_THRESHOLD = config.get("ident_threshold", 95.0)
 
 BP_MERGE = config.get("bp_merge")
-BP_ALR_MERGE = config.get("bp_alr_merge", 1000)
+BP_ALR_MERGE = config.get("bp_alr_merge", 8000)
 RESTRICT_ALR = config.get("restrict_alr", True)
 
 
@@ -336,15 +338,19 @@ use rule add_target_bed_coords as add_target_bed_coords_windows with:
 
 
 ###
-# Intersect RM: Merges repeatmasker bed file with 500bp slop, and only keeps those above the ALR Threshold
+# Intersect RM: Merges repeatmasker bed file with desired bp slop
 #               Intersects merged ALR bed file with binned methylation frequency bedfile and self sequence identity bedfile
 ###
 
 
 rule intersect_RM:
     input:
-        repeat_masker=rules.add_target_bed_coords_rm_alr.output,
-        ident=rules.format_1d_ident.output.bed_filtered,
+        rm=(rules.add_target_bed_coords_rm_alr.output if RESTRICT_ALR else []),
+        ident=(
+            rules.format_1d_ident.output.bed_filtered
+            if WINDOW_IDENT and IDENT_THRESHOLD
+            else []
+        ),
         binned_freq=rules.add_target_bed_coords_windows.output,
     output:
         intersect_bed=join(OUTPUT_DIR, "bed", "{sample}_intersect.bed"),
@@ -357,25 +363,32 @@ rule intersect_RM:
         hrs=1,
     params:
         bp_alr_merge=BP_ALR_MERGE,
+        rm_cmd=lambda wc, input: bool(input.rm),
+        ident_cmd=lambda wc, input: bool(input.ident),
     threads: 1
     conda:
         "envs/tools.yaml"
     shell:
         """
-        {{ bedtools merge -i {input.repeat_masker} -d {params.bp_alr_merge} | \
-        bedtools intersect -a {input.binned_freq} -b - | \
-        bedtools intersect -a - -b {input.ident} ;}} > {output.intersect_bed} 2>> {log}
+        if [ "{params.rm_cmd}" == "True" ] && [ "{params.ident_cmd}" == "True" ]; then
+            {{ bedtools merge -i {input.rm} -d {params.bp_alr_merge} | \
+            bedtools intersect -a {input.binned_freq} -b - | \
+            bedtools intersect -a - -b {input.ident} ;}} > {output.intersect_bed} 2>> {log}
+        elif [ "{params.rm_cmd}" == "True" ]; then
+            {{ bedtools merge -i {input.rm} -d {params.bp_alr_merge} | \
+            bedtools intersect -a {input.binned_freq} -b - ;}} > {output.intersect_bed} 2>> {log}
+        elif [ "{params.ident_cmd}" == "True" ]; then
+            bedtools intersect -a {input.binned_freq} -b {input.ident} > {output.intersect_bed} 2>> {log}
+        else
+            cp {input.binned_freq} {output.intersect_bed}
+        fi
         """
 
 
 checkpoint call_cdrs:
     input:
         script=workflow.source_path("scripts/cdr_finder.py"),
-        methyl_bed=(
-            rules.intersect_RM.output.intersect_bed
-            if RESTRICT_ALR
-            else rules.add_target_bed_coords_windows.output
-        ),
+        methyl_bed=rules.intersect_RM.output.intersect_bed,
         override_chrom_params=lambda wc: (
             MANIFEST[wc.sample]["override_chrom_params"]
             if MANIFEST[wc.sample].get("override_chrom_params", [])
@@ -393,7 +406,15 @@ checkpoint call_cdrs:
     params:
         bp_merge=f"--bp_merge {BP_MERGE}" if BP_MERGE else "",
         thr_cdr=f"--thr_cdr {CDR_THRESHOLD}" if CDR_THRESHOLD else "",
-        thr_zscore=f"--thr_zscore {ZSCORE_THRESHOLD}" if ZSCORE_THRESHOLD else "",
+        thr_methyl_score=f"--thr_methyl_score {METHYL_SCORE_THRESHOLD}"
+        if METHYL_SCORE_THRESHOLD
+        else "",
+        thr_dmethyl_score=f"--thr_dmethyl_score {DMETHYL_SCORE_THRESHOLD}"
+        if DMETHYL_SCORE_THRESHOLD
+        else "",
+        thr_plen_score=f"--thr_plen_score {PLEN_SCORE_THRESHOLD}"
+        if PLEN_SCORE_THRESHOLD
+        else "",
         override_chrom_params=lambda wc, input: (
             f"--override_chrom_params {input.override_chrom_params}"
             if input.override_chrom_params
@@ -404,11 +425,13 @@ checkpoint call_cdrs:
     threads: 1
     shell:
         """
-        python {input.script} \
+        python {input.script} detect \
         -i {input.methyl_bed} \
         {params.bp_merge} \
         {params.thr_cdr} \
-        {params.thr_zscore} > {output} 2> {log}
+        {params.thr_dmethyl_score} \
+        {params.thr_plen_score} \
+        {params.thr_methyl_score} -p p_exp/{wildcards.sample} > {output} 2> {log}
         """
 
 
@@ -494,5 +517,5 @@ rule cdr_plots:
 rule all:
     input:
         expand(rules.call_cdrs.output, sample=MANIFEST.keys()),
-        expand(rules.cdr_plots.output, sample=MANIFEST.keys()),
+        # expand(rules.cdr_plots.output, sample=MANIFEST.keys()),
     default_target: True

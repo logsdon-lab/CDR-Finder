@@ -3,26 +3,37 @@ samples:
     fasta: test/data/fa/CHM13_chr8_chr21.fa.gz
     regions: test/data/bed/CHM13_cen_500kbp.bed
     bam: test/data/bam/CHM13_chr8_chr21.bam
-    # Add plot titles
-    titles: test/data/bed/titles.tsv
 
 # Size of the methylation windows to average over
 window_size: 5000
 
-# Size of ALR repeat stretches to include in search of CDR
-alr_threshold: 100000
+# Size of sequence identity windows. Optional.
+window_size_ident: 5000
 
-# Distance to merge adjacent CDRs. Can omit.
+# Number of modified z-scores below median to be considered dip.
+# Cannot use z-score as methylation is generally highly skewed left.
+# Based on median-absolute-deviation or MAD.
+# https://www.statisticshowto.com/median-absolute-deviation/
+methyl_score_threshold: -2.5
+
+# z-score threshold for derivative of avg.
+# Higher values filter for more extreme dips.
+# 1.0 - Filter 68% of edges
+# 2.0 - Filter 95% of edges
+# 3.0 - Filter 99.7% of edges
+dmethyl_score_threshold: 1.5
+
+# Identity of regions required to evaluate. Optional.
+ident_threshold: 95.0
+
+# Minimum CDR size. Optional.
+cdr_threshold: 1
+
+# Distance to merge adjacent CDRs. Optional.
 bp_merge: 1
 
-# Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
-# ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
-height_perc_valley_threshold: 0.34
+# Distance to merge alpha-satellite repeat annotations. Optional.
+bp_alr_merge: 8000
 
-prom_perc_valley_threshold: 0.3
-
-bp_alr_merge: 1000
-
-bp_edge: 500000
-
-extend_edges_std: null
+# Container. Optional.
+container: "docker://logsdonlab/cdr-finder:latest"

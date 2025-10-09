@@ -1,16 +1,19 @@
+import os
 import sys
 import json
 import argparse
 from collections import deque
-from typing import Callable, Iterable
+from typing import TYPE_CHECKING, Callable, Iterable, Any
 
 import polars as pl
-import numpy as np
-from scipy.stats import chi2
-from scipy.spatial import distance
-from scipy.linalg import inv
-from scipy.signal import peak_prominences
+import matplotlib.pyplot as plt
+from matplotlib.axes import Axes
 from intervaltree import Interval, IntervalTree
+
+if TYPE_CHECKING:
+    SubArgumentParser = argparse._SubParsersAction[argparse.ArgumentParser]
+else:
+    SubArgumentParser = Any
 
 
 def fn_cmp_def(_itv_1: Interval, _itv_2: Interval) -> bool:
@@ -55,42 +58,8 @@ def merge_itvs(
     return final_itvs
 
 
-def detect_outlier_regions(
-    df: pl.DataFrame, cols: Iterable[str] = ("avg", "prom"), p_val: float = 0.05
-) -> IntervalTree:
-    """
-    Use Mahalanobis Distance to detect outlier regions based on prominence and average methylation of peaks.
-    * multivariate equivalent of the Euclidean distance.
-
-    Adapted idea from https://www.sciencedirect.com/science/article/pii/S1746809419303404
-
-    > Mahalanobis distance (dm) was employed to detect outliers in the multivariate dataset.
-    > dm enables a powerful statistical technique to determine how likely (or unlikely)
-    > an outlier lies at a specific distance away (or closer) from the center of the distribution.
-
-    """
-    itree = IntervalTree()
-    # Use average methylation and prominence of each peak.
-    df_coords = df.select("st", "end")
-    vals = df.select(cols).to_numpy()
-    means = np.mean(vals, axis=0)
-    try:
-        inv_cov = inv(np.cov(vals.T))
-    except Exception:
-        return itree
-    # https://stackoverflow.com/a/66856690
-    dst = [distance.mahalanobis(row, means, inv_cov) for row in vals]
-    # https://www.machinelearningplus.com/statistics/mahalanobis-distance/
-    # Filter coords that are not significant assuming distances follow chi-square distribution.
-    dof = len(cols) - 1
-    df_coords = df_coords.with_columns(p_val=1 - chi2.cdf(dst, dof))
-    for itv in df_coords.filter(pl.col("p_val") < p_val).iter_rows(named=True):
-        itree.add(Interval(itv["st"], itv["end"], itv["p_val"]))
-    return itree
-
-
-def main():
-    ap = argparse.ArgumentParser(description="CDR finder.")
+def add_detect_cli(subparser: SubArgumentParser) -> None:
+    ap = subparser.add_parser("detect", description="Detect CDRs.")
     ap.add_argument(
         "-i",
         "--infile",
@@ -107,18 +76,44 @@ def main():
         help="CDR regions as 3-column bedfile.",
     )
     ap.add_argument(
-        "--bp_merge", type=int, default=None, help="Base pairs to merge CDRs."
+        "-b", "--bp_merge", type=int, default=None, help="Base pairs to merge CDRs."
     )
     ap.add_argument(
-        "--thr_pvalue", type=float, default=0.05, help="Required p-value to call CDR."
+        "-g",
+        "--bp_group",
+        type=int,
+        default=8_000,
+        help="Base pairs to group methylated regions to evaluate CDRs.",
     )
     ap.add_argument(
-        "--thr_zscore",
+        "-m",
+        "--thr_methyl_score",
         type=float,
-        default=-1.8,
-        help="Number of z-scores to find/extend CDRs. Should be negative.",
+        default=-3.0,
+        help="Number of adjusted z-scores to find dip regions. ",
+    )
+    ap.add_argument(
+        "-d",
+        "--thr_dmethyl_score",
+        type=float,
+        default=1.0,
+        help="Number of z-scores of the derivative of the average to find steep edges of CDRs. Higher values find steeper regions.",
+    )
+    ap.add_argument(
+        "-l",
+        "--thr_plen_score",
+        type=float,
+        default=1.0,
+        help="Number of z-scores of the CDR length. Higher filters for larger CDRs.",
     )
     ap.add_argument("--thr_cdr", type=int, default=1, help="Minimum CDR size.")
+    ap.add_argument(
+        "-p",
+        "--output_plot_dir",
+        type=str,
+        default=None,
+        help="Output debug plots to directory.",
+    )
     ap.add_argument(
         "--override_chrom_params",
         type=str,
@@ -126,7 +121,152 @@ def main():
         help="JSON file with params per chromosome name to override default settings. Each parameter name should match.",
     )
 
+
+def add_plot_hist_cli(subparser: SubArgumentParser) -> None:
+    ap = subparser.add_parser(
+        "hist",
+        description="Plot histogram of data for both edges and methyl average. Use to set proper scores for detect command.",
+    )
+    ap.add_argument(
+        "-i",
+        "--infile",
+        default=sys.stdin,
+        type=argparse.FileType("rb"),
+        required=True,
+        help="Average 5mC methylation signal as 4-column bedfile.",
+    )
+    ap.add_argument(
+        "-o",
+        "--output_dir",
+        required=True,
+        type=str,
+        help="Output directory for plots.",
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser(description="CDR finder.")
+    sub_ap = ap.add_subparsers(dest="cmd")
+    add_detect_cli(sub_ap)
+    add_plot_hist_cli(sub_ap)
+
     args = ap.parse_args()
+
+    if args.cmd == "detect":
+        return detect(args)
+    elif args.cmd == "hist":
+        return plot_hist(args)
+    else:
+        raise ValueError(f"Not a valid command ({args.cmd})")
+
+
+def add_metric_ndev_lines(
+    ax: Axes, ax_top: Axes, middle: float, ndev: float, itv_bounds: Interval
+):
+    line_kwargs = {"color": "black", "linestyle": "dotted"}
+    valid_lines = [(middle, 0)]
+    # Draw middle line.
+    ax.axvline(middle, **line_kwargs)
+
+    # Draw remaining lines if within range.
+    n = 1
+    while True:
+        lower = middle - (ndev * n)
+        upper = middle + (ndev * n)
+        lower_valid = itv_bounds.contains_point(lower)
+        upper_valid = itv_bounds.contains_point(upper)
+
+        if not lower_valid and not upper_valid:
+            break
+        if lower_valid:
+            ax.axvline(lower, **line_kwargs)
+            valid_lines.append((lower, f"-{n}"))
+        if upper_valid:
+            ax.axvline(upper, **line_kwargs)
+            valid_lines.append((upper, f"+{n}"))
+        n += 1
+    # Clear labels.
+    ax_top.set_xticks([], [])
+    xticklocs, xticklbls = zip(*valid_lines)
+    ax_top.set_xticks(xticklocs, xticklbls)
+    ax_top.set_xlim(ax.get_xlim())
+
+
+def plot_hist_avg(df_chr_methyl: pl.DataFrame, chrom: str, outfile_avg: str):
+    itv_avg = Interval(df_chr_methyl["avg"].min(), df_chr_methyl["avg"].max())
+    median_avg = df_chr_methyl.get_column("avg").median()
+    # https://www.ibm.com/docs/en/cognos-analytics/12.0.0?topic=terms-modified-z-score
+    mstd = 1.486 * (df_chr_methyl.get_column("avg") - median_avg).abs().median()
+
+    # Plot methyl average percent.
+    fig, ax = plt.subplots()
+    ax_top = ax.twiny()
+    ax.hist(df_chr_methyl["avg"])
+    ax.set_title(f"Distribution of mean CpG methylation ({chrom})")
+    ax.set_ylabel("Count")
+    ax.set_xlabel("Mean CpG methylation (%)")
+
+    add_metric_ndev_lines(ax, ax_top, median_avg, mstd, itv_avg)
+    ax_top.set_xlabel("Number of modified z-scores")
+
+    fig.savefig(outfile_avg, dpi=600, bbox_inches="tight")
+    fig.clear()
+
+
+def plot_hist(args: argparse.Namespace):
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    df = pl.read_csv(
+        args.infile,
+        separator="\t",
+        has_header=False,
+        new_columns=["chrom", "st", "end", "avg"],
+    )
+
+    for chrom, df_chr_methyl in df.group_by(["chrom"]):
+        chrom: str = chrom[0]
+
+        print(f"Plotting {chrom}.", file=sys.stderr)
+
+        outfile_avg = os.path.join(args.output_dir, f"{chrom}_avg.png")
+
+        plot_hist_avg(df_chr_methyl, chrom, outfile_avg)
+
+
+def group_df(df: pl.DataFrame, dst: int) -> pl.DataFrame:
+    return (
+        df.with_columns(
+            # c1  st1 (end1)
+            # c1 (st2) end2
+            dst_behind=(pl.col("st") - pl.col("end").shift(1)).fill_null(0),
+            dst_ahead=(pl.col("st").shift(-1) - pl.col("end")).fill_null(0),
+        )
+        .with_row_index()
+        .with_columns(
+            # Group rows based on distance.
+            grp=pl.when(pl.col("dst_behind").le(dst))
+            # We assign 0 if within merge dst.
+            .then(pl.lit(0))
+            # Otherwise, give unique index.
+            .otherwise(pl.col("index") + 1)
+            # Then create run-length ID to group on.
+            # Contiguous rows within distance will be grouped together.
+            .rle_id()
+        )
+        .with_columns(
+            # Adjust groups in scenarios where should join group ahead or behind but given unique group.
+            pl.when(pl.col("dst_behind").le(dst) & pl.col("dst_ahead").le(dst))
+            .then(pl.col("grp"))
+            .when(pl.col("dst_behind").le(dst))
+            .then(pl.col("grp").shift(1))
+            .when(pl.col("dst_ahead").le(dst))
+            .then(pl.col("grp").shift(-1))
+            .otherwise(pl.col("grp"))
+        )
+    )
+
+
+def detect(args: argparse.Namespace):
     df = pl.read_csv(
         args.infile,
         separator="\t",
@@ -145,164 +285,291 @@ def main():
     # /           \_/     \
     for chrom, df_chr_methyl in df.group_by(["chrom"]):
         chrom: str = chrom[0]
+        min_st, max_end = df_chr_methyl["st"].min(), df_chr_methyl["end"].max()
+        chrom_coords = f"{chrom}:{min_st}-{max_end}"
 
         # Get override params.
         bp_merge = override_params.get(chrom, {}).get("bp_merge", args.bp_merge)
         if not bp_merge:
             bp_merge = 0
-
-        thr_zscore = override_params.get(chrom, {}).get("thr_zscore", args.thr_zscore)
-        if thr_zscore > 0:
-            raise ValueError(f"z-score threshold for {chrom} is non-negative.")
+        bp_group = override_params.get(chrom, {}).get("bp_group", args.bp_group)
 
         thr_cdr = override_params.get(chrom, {}).get("thr_cdr", args.thr_cdr)
-        thr_pvalue = override_params.get(chrom, {}).get("thr_pvalue", args.thr_pvalue)
 
-        df_chr_methyl = df_chr_methyl.with_row_index()
+        thr_methyl_score = override_params.get(chrom, {}).get(
+            "thr_methyl_score", args.thr_methyl_score
+        )
+        if thr_methyl_score > 0:
+            raise ValueError(f"Adjusted z-score threshold for {chrom} is non-negative.")
 
-        # Calculate prominences.
-        proms, _, _ = peak_prominences(-df_chr_methyl["avg"], df_chr_methyl["index"])
-        df_chr_methyl = df_chr_methyl.with_columns(prom=pl.Series(proms))
+        thr_dmethyl_score = override_params.get(chrom, {}).get(
+            "thr_dmethyl_score", args.thr_dmethyl_score
+        )
+
+        thr_plen_score = override_params.get(chrom, {}).get(
+            "thr_plen_score", args.thr_plen_score
+        )
+
+        if args.output_plot_dir:
+            os.makedirs(args.output_plot_dir, exist_ok=True)
+
+            fig, axes = plt.subplots(nrows=3, ncols=1, figsize=(12, 6))
+            fig.suptitle(chrom_coords)
+            fig.supxlabel("Position")
+
+            ax_1: Axes = axes[0]
+            ax_2: Axes = axes[1]
+            ax_3: Axes = axes[2]
+            labels = [
+                "Mean\nCpG methylation (%)",
+                "Mean\nCpG methylation\nz-scores",
+                "Change in mean\nCpG methylation\nz-scores",
+            ]
+            for ax, lbl in zip(axes, labels):
+                ax: Axes
+                ax.set_xlim(min_st, max_end)
+                ax.set_ylabel(lbl)
+
+            # Show median.
+            ax_1.axhline(df_chr_methyl["avg"].median(), linestyle="dotted")
 
         # Group adjacent, contiguous intervals.
-        # Split regions with no methylation due to N's.
-        # Allow a jump of ~8000 bp (rough size of LINE element)
-        df_chr_methyl_adj_groups = (
-            df_chr_methyl.filter(pl.col("avg") != 0.0)
-            .with_columns(
-                brk=(pl.col("st").shift(-1) - pl.col("end").add(1)).abs().le(8000)
-            )
-            .fill_null(True)
-            .with_columns(pl.col("brk").rle_id())
-            .with_columns(
-                pl.when(pl.col("brk") % 2 == 0)
-                .then(pl.col("brk") - 1)
-                .otherwise(pl.col("brk"))
-            )
-            .partition_by("brk")
+        df_chr_methyl = group_df(df_chr_methyl, bp_group)
+
+        grp_lowest_methyl = (
+            df_chr_methyl.filter(pl.col("avg") != 0)
+            .group_by(["grp"])
+            .agg(min_dip=pl.col("avg").min())
+            .filter(pl.col("min_dip") == pl.col("min_dip").min())
+            .row(0, named=True)
+            .get("grp")
         )
-        itree_methyl = IntervalTree(
-            Interval(row["st"], row["end"], row["avg"])
-            for row in df_chr_methyl.iter_rows(named=True)
+        df_grp = df_chr_methyl.filter(pl.col("grp") == grp_lowest_methyl)
+        st_grp, end_grp = df_grp["st"].min(), df_grp["end"].max()
+
+        grp_chrom = f"{chrom}:{st_grp}-{end_grp}"
+
+        # Calculate MAD-score across subregion.
+        # - A MAD-score threshold will find bins with abnormally low methylation but will resist outliers.
+        mad = (df_grp["avg"] - df_grp["avg"].median()).abs().median()
+
+        df_edges = (
+            df_grp.with_columns(
+                # First derivative
+                d_avg=pl.col("avg").diff() / 2.0
+            )
+            # Group derivatives in one direction and within distance
+            .with_columns(d_grp=pl.col("d_avg").lt(0).rle_id())
+            .group_by(["d_grp"])
+            # Calculate derivative across all oriented derivatives. Uses sum rule.
+            # https://www.geogebra.org/m/wtfhdbf3
+            # And get intervals.
+            .agg(
+                st=pl.col("st").min(),
+                end=pl.col("end").max() + 1,
+                d_avg=pl.col("d_avg").sum(),
+            )
+            .with_columns(
+                # Second derivative.
+                pl.col("d_avg").diff() / 2.0
+            )
+            .drop_nulls()
+            # Calculate z-score
+            .with_columns(
+                zscore_d_avg=(pl.col("d_avg") - pl.col("d_avg").mean())
+                / pl.col("d_avg").std()
+            )
         )
-        # # Use std of entire region above mean.
-        chr_methyl_avg_std = df_chr_methyl["avg"].mean() ** 0.5
-
-        for df_grp in df_chr_methyl_adj_groups:
-            grp_st, grp_end = df_grp["st"].first(), df_grp["end"].max()
-
-            # Calculate significant regions within each group using Mahalanobis Distance.
-            # This only finds the major peaks.
-            # We use the z-scores method below to find entire regions before intersecting them with these intervals.
-            outlier_itvs = detect_outlier_regions(
-                df_grp,
-                cols=["prom", "avg"],
-                p_val=thr_pvalue,
-            )
-            print(
-                f"Detected {len(outlier_itvs)} outlier intervals at p-value of {thr_pvalue} for {chrom}:{grp_st}-{grp_end}.",
-                file=sys.stderr,
-            )
-
-            # Calculate z-score across subregion.
-            # A z-score threshold will find bins with abnormally low methylation.
-            # - We assume the average methyl percentage is normally distributed.
-            df_grp = df_grp.with_columns(
-                zscore=(pl.col("avg") - pl.col("avg").mean()) / chr_methyl_avg_std
-            )
-
-            # Then filter for expected negative zscore.
-            df_peaks = df_grp.filter(pl.col("zscore") < thr_zscore)
-
-            print(
-                f"Filtered {df_grp.shape[0] - df_peaks.shape[0]} dips below {thr_zscore=} for {chrom}:{grp_st}-{grp_end}.",
-                file=sys.stderr,
-            )
-
-            cdrs = [
-                Interval(row["st"], row["end"] + 1, (row["avg"], row["prom"]))
-                for row in df_peaks.iter_rows(named=True)
+        # Add all edges found to intervaltree to query.
+        itree_edges = IntervalTree(
+            [
+                Interval(row["st"], row["end"], row["zscore_d_avg"])
+                for row in df_edges.iter_rows(named=True)
             ]
+        )
 
-            def check_in_between(itv_1: Interval, itv_2: Interval) -> bool:
-                df_between = df_grp.filter(
-                    (pl.col("st") >= itv_1.end) & (pl.col("end") <= itv_2.begin)
+        if args.output_plot_dir:
+            for itv in itree_edges:
+                itv: Interval
+                ax_3.bar(
+                    x=itv.begin,
+                    height=itv.data if itv.data else 0.0,
+                    width=itv.length(),
+                    color="blue",
+                    alpha=0.5,
+                    align="edge",
                 )
-                mean_between = df_between["avg"].mean()
-                if not mean_between:
-                    return True
-                return mean_between <= df_grp["avg"].mean()
 
-            # Extend CDRs making sure that we don't extend past the mean between two intervals.
-            merged_cdrs = merge_itvs(
-                cdrs,
-                dst=bp_merge,
-                fn_cmp=check_in_between,
-                fn_merge_itv=lambda x, y: (
-                    Interval(
-                        x.begin,
-                        y.end,
-                        ((x.data[0] + y.data[0]) / 2, max(x.data[1], y.data[1])),
-                    )
-                ),
+        df_grp = df_grp.with_columns(
+            # https://www.statology.org/modified-z-score/
+            mscore_avg=((pl.col("avg") - pl.col("avg").median()) * 0.6745) / mad,
+        )
+        # Then filter for expected negative mscore and peak length score.
+        df_peaks = (
+            df_grp.with_columns(
+                is_dip=pl.when(pl.col("mscore_avg") < thr_methyl_score)
+                .then(pl.col("index").max() + 1)
+                .otherwise(pl.col("index"))
+                .rle_id()
+            )
+            .group_by(["is_dip"])
+            .agg(
+                pl.col("st").min(),
+                pl.col("end").max(),
+                pl.col("mscore_avg").median(),
+            )
+            .with_columns(plen=pl.col("end") - pl.col("st"))
+            .with_columns(
+                zscore_plen=(pl.col("plen") - pl.col("plen").mean())
+                / pl.col("plen").std(),
+            )
+            .filter(pl.col("mscore_avg") < thr_methyl_score)
+        )
+
+        print(
+            f"Filtered {df_grp.shape[0] - df_peaks.shape[0]} dips below {thr_methyl_score=} and above {thr_plen_score=} for {grp_chrom}.",
+            file=sys.stderr,
+        )
+
+        cdrs = [
+            Interval(row["st"], row["end"] + 1, row["mscore_avg"])
+            for row in df_peaks.iter_rows(named=True)
+        ]
+
+        def check_in_between(itv_1: Interval, itv_2: Interval) -> bool:
+            df_between = df_grp.filter(
+                (pl.col("st") >= itv_1.end) & (pl.col("end") <= itv_2.begin)
+            )
+            mean_between = df_between["avg"].mean()
+            if not mean_between:
+                return True
+            return mean_between <= df_grp["avg"].mean()
+
+        # Extend CDRs making sure that we don't extend past the mean between two intervals.
+        merged_cdrs = merge_itvs(
+            cdrs,
+            dst=bp_merge,
+            fn_cmp=check_in_between,
+            fn_merge_itv=lambda x, y: (
+                Interval(
+                    x.begin,
+                    y.end,
+                    (x.data + y.data) / 2,
+                )
+            ),
+        )
+
+        num_merged = len(cdrs) - len(merged_cdrs)
+        if num_merged:
+            print(
+                f"Merged {len(cdrs) - len(merged_cdrs)} CDRs for {grp_chrom}.",
+                file=sys.stderr,
             )
 
-            num_merged = len(cdrs) - len(merged_cdrs)
-            if num_merged:
+        if args.output_plot_dir:
+            ax_1.bar(
+                x=df_grp["st"],
+                height=df_grp["avg"],
+                width=df_grp["end"] - df_grp["st"],
+                color="black",
+                align="edge",
+            )
+            ax_2.bar(
+                x=df_grp["st"],
+                height=df_grp["mscore_avg"],
+                width=df_grp["end"] - df_grp["st"],
+                color="orange",
+                alpha=0.5,
+                align="edge",
+            )
+
+        for cdr in sorted(merged_cdrs):
+            cdr_st, cdr_end, cdr_mscore_avg = cdr.begin, cdr.end, cdr.data
+            cdr_length = cdr.length()
+
+            if cdr_length < thr_cdr:
                 print(
-                    f"Merged {len(cdrs) - len(merged_cdrs)} CDRs for {chrom}:{grp_st}-{grp_end}.",
+                    f"Filtered {chrom}:{cdr.begin}-{cdr.end} with {cdr_length=} below {thr_cdr=}.",
                     file=sys.stderr,
                 )
+                continue
 
-            for cdr in sorted(merged_cdrs):
-                if not outlier_itvs.overlap(cdr):
-                    print(
-                        f"Omitted {chrom}:{cdr.begin}-{cdr.end} not overlapping significant interval.",
-                        file=sys.stderr,
-                    )
-                    continue
-                cdr_st, cdr_end, (cdr_avg, cdr_prom) = cdr.begin, cdr.end, cdr.data
-
-                edge_len = 1_000_000
-                ovl_left_edge = itree_methyl.overlap(cdr_st - edge_len, cdr_st)
-                ovl_right_edge = itree_methyl.overlap(cdr_end, cdr_end + edge_len)
-                left_edge_median = np.median([itv.data for itv in ovl_left_edge])
-                right_edge_median = np.median([itv.data for itv in ovl_right_edge])
-                left_edge_len = sum(itv.length() for itv in ovl_left_edge)
-                right_edge_len = sum(itv.length() for itv in ovl_right_edge)
-
+            # Merge overlap edges by two windows if edges jagged.
+            ovl_edges = sorted(itree_edges.overlap(cdr.begin, cdr.end))
+            if not ovl_edges:
                 print(
-                    cdr,
-                    [
-                        left_edge_median * (left_edge_len / edge_len),
-                        right_edge_median * (right_edge_len / edge_len),
-                    ],
+                    f"Filtered {chrom}:{cdr.begin}-{cdr.end} not overlapping 2 edge intervals.",
+                    file=sys.stderr,
                 )
-                length = cdr.length()
+                continue
 
-                # # CDR should have prominence greater than average dip height.
-                # if cdr_avg > cdr_prom:
-                #     continue
+            # # All edges sloped in the same direction is wrong (x).
+            # #  x _ o _ x
+            # #   / \_/ \
+            # #  /       \
+            # elif all((itv.data * ovl_edges[0].data) > 0 for itv in ovl_edges[1:]):
+            #     print(
+            #         f"Filtered {chrom}:{cdr.begin}-{cdr.end} where edges are sloped in only one direction. ({ovl_edges})",
+            #         file=sys.stderr,
+            #     )
+            #     continue
 
-                if length < thr_cdr:
-                    print(
-                        f"Omitted {chrom}:{cdr.begin}-{cdr.end} with {length=} below {thr_cdr=}.",
-                        file=sys.stderr,
-                    )
-                    continue
-                row = [
-                    chrom,
-                    str(cdr_st),
-                    str(cdr_end),
-                    "cdr",
-                    # str(cdr_avg),
-                    f"{cdr_avg},{cdr_prom}",
-                    "+",
-                    str(cdr_st),
-                    str(cdr_end),
-                    "255,0,0",
-                ]
-                args.outfile.write("\t".join(row) + "\n")
+            # Check that among valid edges at least one negative and positive value is present.
+            # min \_/ max
+            valid_edges = [
+                itv for itv in ovl_edges if abs(itv.data) > thr_dmethyl_score
+            ]
+            if not valid_edges:
+                print(
+                    f"Filtered {chrom}:{cdr.begin}-{cdr.end} where no edge ({ovl_edges}) is below ({thr_dmethyl_score=})",
+                    file=sys.stderr,
+                )
+                continue
+
+            min_edge, max_edge = (
+                min(valid_edges, key=lambda x: x.data),
+                max(valid_edges, key=lambda x: x.data),
+            )
+            # Must have negative and positive edge and must cover the majority of the CDR.
+            cdr_edges_valid = min_edge.data < 0 and max_edge.data > 0
+            if not cdr_edges_valid:
+                print(
+                    f"Filtered {chrom}:{cdr.begin}-{cdr.end} missing a valid descending and ascending CDR edge. ({ovl_edges})",
+                    file=sys.stderr,
+                )
+                continue
+
+            row = [
+                chrom,
+                str(cdr_st),
+                str(cdr_end),
+                "cdr",
+                str(cdr_mscore_avg),
+                ".",
+                str(cdr_st),
+                str(cdr_end),
+                "255,0,0",
+            ]
+            if args.output_plot_dir:
+                ax_1.axvspan(cdr_st, cdr_end, alpha=0.34, color="red")
+
+            args.outfile.write("\t".join(row) + "\n")
+
+        if args.output_plot_dir:
+            # Reset ticks so in 1 z-score increments.
+            ymin_2, ymax_2 = ax_2.get_ylim()
+            ymin_3, ymax_3 = ax_3.get_ylim()
+            ymin_2, ymax_2 = int(ymin_2), int(ymax_2)
+            ymin_3, ymax_3 = int(ymin_3), int(ymax_3)
+            yticks_2 = (*range(ymin_2, 0), *range(0, ymax_2))
+            yticks_3 = (*range(ymin_3, 0), *range(0, ymax_3))
+            ax_2.set_yticks(yticks_2, [str(tk) for tk in yticks_2])
+            ax_3.set_yticks(yticks_3, [str(tk) for tk in yticks_3])
+            fig.savefig(
+                os.path.join(args.output_plot_dir, f"{chrom_coords}.png"),
+                bbox_inches="tight",
+            )
+            plt.close(fig)
 
 
 if __name__ == "__main__":
