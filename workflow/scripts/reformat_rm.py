@@ -38,8 +38,8 @@ def main():
         truncate_ragged_lines=True,
         skip_rows=3,
         has_header=False,
-        columns=[4, 5, 6, 8, 9, 10],
-        new_columns=["chrom", "chrom_st", "chrom_end", "strand", "rtype", "rclass"],
+        columns=[4, 5, 6, 9],
+        new_columns=["chrom", "chrom_st", "chrom_end", "rtype"],
     )
     df_rename_key = (
         pl.read_csv(

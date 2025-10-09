@@ -7,3 +7,4 @@ dependencies:
   - ont-modkit==0.3.2
   - samtools
   - seqtk
+  - seqkit
