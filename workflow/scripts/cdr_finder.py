@@ -291,7 +291,7 @@ def main():
                         cdr_end = cdr_end
 
                 cdr_intervals[chrom].chop(cdr_st, cdr_end)
-                
+
                 # Add merge distance bp.
                 if bp_merge:
                     cdr_st = cdr_st - bp_merge
@@ -321,20 +321,38 @@ def main():
             _, xmax = ax.get_xlim()
             for value, label, color in lines:
                 value = round(value)
-                ax.axhline(
-                    round(value), label=label, linestyle="dotted", color=color
+                ax.axhline(round(value), label=label, linestyle="dotted", color=color)
+                txt = ax.text(
+                    xmax,
+                    value,
+                    str(value),
+                    ha="center",
+                    va="center",
+                    color=color,
+                    fontsize="small",
                 )
-                txt = ax.text(xmax, value, str(value), ha="center", va="center", color=color, fontsize="small")
-                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
-      
+                txt.set_path_effects(
+                    [PathEffects.withStroke(linewidth=2, foreground="w")]
+                )
+
             ax.set_xlabel("Position (bp)")
             ax.set_ylabel("Average CpG methylation (%)")
             ax.set_ylim(0.0, 100.0)
             for cdr in itvs_cdr.iter():
                 midpt = cdr.begin + ((cdr.end - cdr.begin) / 2)
                 # https://osxastrotricks.wordpress.com/2014/12/02/add-border-around-text-with-matplotlib/
-                txt = ax.text(midpt, avg_methyl_median + 5, round(cdr.data), color="black", fontsize="small", ha="center", va="center")
-                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
+                txt = ax.text(
+                    midpt,
+                    avg_methyl_median + 5,
+                    round(cdr.data),
+                    color="black",
+                    fontsize="small",
+                    ha="center",
+                    va="center",
+                )
+                txt.set_path_effects(
+                    [PathEffects.withStroke(linewidth=2, foreground="w")]
+                )
                 ax.axvspan(cdr.begin, cdr.end, color="red", alpha=0.5, label="CDR")
 
             handles, labels = ax.get_legend_handles_labels()
@@ -371,8 +389,18 @@ def main():
             if bp_merge:
                 cdr_st += bp_merge
                 cdr_end -= bp_merge
-
-            args.outfile.write(f"{chrom}\t{cdr_st}\t{cdr_end}\t{cdr_height}\n")
+            row = [
+                chrom,
+                cdr_st,
+                cdr_end,
+                "cdr",
+                cdr_height,
+                ".",
+                cdr_st,
+                cdr_end,
+                "0,0,0",
+            ]
+            args.outfile.write(f"{'\t'.join(str(e) for e in row)}\n")
 
 
 if __name__ == "__main__":
