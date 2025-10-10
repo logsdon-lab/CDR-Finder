@@ -42,7 +42,7 @@ prom_perc_valley_threshold: 0.3
 # Can be omitted.
 baseline_avg_methyl: 0.4
 
-bp_alr_merge: 1000
+bp_alr_merge: 8000
 
 bp_edge: 500000
 
