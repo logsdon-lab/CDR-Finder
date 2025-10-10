@@ -35,7 +35,7 @@ from test.helpers.integration import run_integration_test
         ),
         (
             "test/cdr/input/CHM13_intersect.bed",
-            "test/cdr/expected/CHM13_cdr.bed",
+            "test/cdr/expected/CHM13_cdr_chr8_params.bed",
             0.5,
             0.5,
             tuple(
