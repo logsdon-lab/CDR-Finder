@@ -94,7 +94,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 
 ## Output
 - `cdr_bed`
-    * CDR regions.
+    * CDR regions with estimated depth.
     * `{config.output_dir}/bed/{sample}_CDR.bed`
 - `cdr_plot`
     * CDR regions plotted with RepeatMasker annotations.

@@ -10,6 +10,7 @@ from typing import Iterable
 import matplotlib.axes
 import polars as pl
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as PathEffects
 
 from scipy import signal
 from intervaltree import Interval, IntervalTree
@@ -296,7 +297,7 @@ def main():
                     cdr_st = cdr_st - bp_merge
                     cdr_end = cdr_end + bp_merge
                 # Trim overlaps.
-                itv_cdr = Interval(cdr_st, cdr_end)
+                itv_cdr = Interval(cdr_st, cdr_end, cdr_height)
                 cdr_intervals[chrom].add(itv_cdr)
 
         if output_plot_dir:
@@ -312,26 +313,28 @@ def main():
                 left=df_chr_methyl["st"].min(),
                 right=df_chr_methyl["st"].max(),
             )
-            ax.axhline(
-                avg_methyl_median, label="Median", linestyle="dotted", color="black"
-            )
-            ax.axhline(
-                cdr_prom_thr,
-                label="Prominence threshold",
-                linestyle="dotted",
-                color="red",
-            )
-            ax.axhline(
-                cdr_height_thr,
-                label="Height threshold",
-                linestyle="dotted",
-                color="blue",
-            )
-
+            lines = [
+                (avg_methyl_median, "Median", "black"),
+                (cdr_prom_thr, "Prominence threshold", "red"),
+                (cdr_height_thr, "Height threshold", "blue"),
+            ]
+            _, xmax = ax.get_xlim()
+            for value, label, color in lines:
+                value = round(value)
+                ax.axhline(
+                    round(value), label=label, linestyle="dotted", color=color
+                )
+                txt = ax.text(xmax, value, str(value), ha="center", va="center", color=color, fontsize="small")
+                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
+      
             ax.set_xlabel("Position (bp)")
             ax.set_ylabel("Average CpG methylation (%)")
             ax.set_ylim(0.0, 100.0)
             for cdr in itvs_cdr.iter():
+                midpt = cdr.begin + ((cdr.end - cdr.begin) / 2)
+                # https://osxastrotricks.wordpress.com/2014/12/02/add-border-around-text-with-matplotlib/
+                txt = ax.text(midpt, avg_methyl_median + 5, round(cdr.data), color="black", fontsize="small", ha="center", va="center")
+                txt.set_path_effects([PathEffects.withStroke(linewidth=2, foreground='w')])
                 ax.axvspan(cdr.begin, cdr.end, color="red", alpha=0.5, label="CDR")
 
             handles, labels = ax.get_legend_handles_labels()
@@ -346,7 +349,7 @@ def main():
                 labels=labels_handles.keys(),
                 handles=labels_handles.values(),
                 loc="center left",
-                bbox_to_anchor=(1.0, 0.5),
+                bbox_to_anchor=(1.0, 1.0),
             )
 
             output_plot = os.path.join(output_plot_dir, f"{chrom}.png")
@@ -364,12 +367,12 @@ def main():
             )
 
         for cdr in sorted(cdrs.iter()):
-            cdr_st, cdr_end = cdr.begin, cdr.end
+            cdr_st, cdr_end, cdr_height = cdr.begin, cdr.end, cdr.data
             if bp_merge:
                 cdr_st += bp_merge
                 cdr_end -= bp_merge
 
-            args.outfile.write(f"{chrom}\t{cdr_st}\t{cdr_end}\n")
+            args.outfile.write(f"{chrom}\t{cdr_st}\t{cdr_end}\t{cdr_height}\n")
 
 
 if __name__ == "__main__":

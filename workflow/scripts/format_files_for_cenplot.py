@@ -32,7 +32,7 @@ def main():
         args.bed_cdr,
         separator="\t",
         has_header=False,
-        new_columns=["chrom", "chrom_st", "chrom_end"],
+        new_columns=["chrom", "chrom_st", "chrom_end", "cdr_height"],
     )
     hsat_repeats = [
         "SAR",
