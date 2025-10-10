@@ -362,9 +362,9 @@ rule aggregate_bed_files:
     input:
         unpack(bed_files),
     output:
-        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_rm.bed"),
-        methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl.bed"),
-        methyl_bed_all=join(OUTPUT_DIR, "bed", "{sample}_merged_methyl_all.bed"),
+        rm_bed=join(OUTPUT_DIR, "bed", "{sample}_rm_merged.bed"),
+        methyl_bed=join(OUTPUT_DIR, "bed", "{sample}_methyl_merged.bed"),
+        methyl_bed_all=join(OUTPUT_DIR, "bed", "{sample}_methyl_all_merged.bed"),
     params:
         rm=lambda wc, input: input.get("rm", "<(echo '')"),
         methyl=lambda wc, input: input.get("methyl", "<(echo '')"),
