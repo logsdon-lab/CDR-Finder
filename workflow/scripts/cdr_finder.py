@@ -264,6 +264,9 @@ def main():
                     cdr_edge_height = statistics.mean(edge_heights)
 
                 # Calculate the height of this CDR looking at edges.
+                if not cdr_low:
+                    continue
+
                 cdr_height = cdr_edge_height - cdr_low
 
                 # Ignore CDR if less than height.
@@ -378,7 +381,7 @@ def main():
     for chrom, cdrs in cdr_intervals.items():
         if bp_merge:
             starting_intervals = len(cdrs)
-            cdrs.merge_overlaps()
+            cdrs.merge_overlaps(data_reducer=lambda x, y: max(x, y))
             print(
                 f"Merged {starting_intervals - len(cdrs)} intervals in {chrom}.",
                 file=sys.stderr,
