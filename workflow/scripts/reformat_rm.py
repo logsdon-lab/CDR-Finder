@@ -66,6 +66,7 @@ def main():
             chrom_end=pl.col("chrom_end") + pl.col("ctg_st"),
         )
         .drop("ctg", "ctg_st", "ctg_end", "new")
+        .unique()
     )
 
     df_outfile.write_csv(outfile, separator="\t", include_header=False)
