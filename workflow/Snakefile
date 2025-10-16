@@ -371,9 +371,9 @@ rule aggregate_bed_files:
         methyl_rgn=lambda wc, input: input.get("methyl_rgn", "<(echo '')"),
     shell:
         """
-        cat {params.rm} > {output.rm_bed}
-        cat {params.methyl_rgn} > {output.methyl_bed}
-        cat {params.methyl} > {output.methyl_bed_all}
+        sort -k1,1 -k2,2n {params.rm} | uniq > {output.rm_bed}
+        sort -k1,1 -k2,2n {params.methyl_rgn} | uniq > {output.methyl_bed}
+        sort -k1,1 -k2,2n {params.methyl} | uniq > {output.methyl_bed_all}
         """
 
 
