@@ -41,6 +41,49 @@ def get_interval(
     return df_res
 
 
+
+def group_by_dst(df: pl.DataFrame, dst: int, group_name: str) -> pl.DataFrame:
+    try:
+        df = df.drop("index")
+    except pl.exceptions.ColumnNotFoundError:
+        pass
+    return (
+        df.with_columns(
+            # c1  st1 (end1)
+            # c1 (st2) end2
+            dst_behind=(pl.col("st") - pl.col("end").shift(1)).fill_null(0),
+            dst_ahead=(pl.col("st").shift(-1) - pl.col("end")).fill_null(0),
+        )
+        .with_row_index()
+        .with_columns(
+            **{
+                # Group HOR units based on distance.
+                group_name: pl.when(pl.col("dst_behind").le(dst))
+                # We assign 0 if within merge dst.
+                .then(pl.lit(0))
+                # Otherwise, give unique index.
+                .otherwise(pl.col("index") + 1)
+                # Then create run-length ID to group on.
+                # Contiguous rows within distance will be grouped together.
+                .rle_id()
+            },
+        )
+        .with_columns(
+            # Adjust groups in scenarios where should join group ahead or behind but given unique group.
+            # B:64617 A:52416 G:1
+            # B:52416 A:1357  G:2 <- This should be group 3.
+            # B:1357  A:1358  G:3
+            pl.when(pl.col("dst_behind").le(dst) & pl.col("dst_ahead").le(dst))
+            .then(pl.col(group_name))
+            .when(pl.col("dst_behind").le(dst))
+            .then(pl.col(group_name).shift(1))
+            .when(pl.col("dst_ahead").le(dst))
+            .then(pl.col(group_name).shift(-1))
+            .otherwise(pl.col(group_name))
+        )
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(description="CDR finder.")
     ap.add_argument(
@@ -159,18 +202,7 @@ def main():
         )
 
         # Group adjacent, contiguous intervals.
-        df_chr_methyl_adj_groups = (
-            df_chr_methyl.with_columns(brk=pl.col("end") == pl.col("st").shift(-1))
-            .fill_null(True)
-            .with_columns(pl.col("brk").rle_id())
-            # Group contiguous intervals.
-            .with_columns(
-                pl.when(pl.col("brk") % 2 == 0)
-                .then(pl.col("brk") + 1)
-                .otherwise(pl.col("brk"))
-            )
-            .partition_by("brk")
-        )
+        df_chr_methyl_adj_groups = group_by_dst(df_chr_methyl, 1, "brk").partition_by("brk")
         avg_methyl_median = df_chr_methyl["avg"].median()
         avg_methyl_mean = df_chr_methyl["avg"].mean()
         # Threshold scaling factor. Will always be at least 1.
@@ -194,7 +226,7 @@ def main():
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
-            df_chr_methyl_adj_grp = df_chr_methyl_adj_grp.with_row_index()
+            df_chr_methyl_adj_grp = df_chr_methyl_adj_grp.drop("index").with_row_index()
 
             # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
@@ -375,7 +407,7 @@ def main():
 
             output_plot = os.path.join(output_plot_dir, f"{chrom}.png")
             fig.savefig(output_plot, bbox_inches="tight", dpi=600)
-            fig.clear()
+            plt.close()
 
     # Merge overlaps and output.
     for chrom, cdrs in cdr_intervals.items():
