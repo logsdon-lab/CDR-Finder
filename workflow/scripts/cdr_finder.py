@@ -141,7 +141,7 @@ def main():
         default=0.4,
         help=" ".join(
             [
-                "Average methylation baseline used to scale thresholds in cases of low coverage.",
+                "Average methylation baseline used to scale thresholds in cases of low average methylation.",
                 "If average methylation is below baseline, multiplies threshold by the ratio in methylation. (baseline / avg_methyl)",
                 "Will only increase threshold.",
                 "Reduces false positives when low average methylation coverage.",
@@ -230,8 +230,11 @@ def main():
 
             # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
+            # wlen applies to both edges (+/- n/2 indices) to find prominence. Lower prevents overestimate of peak prom.
+            window = (df_chr_methyl_adj_grp["end"] - df_chr_methyl_adj_grp["st"]).mode()[0]
+            wlen = (bp_edge // window) * 2
             _, peak_info = signal.find_peaks(
-                -df_chr_methyl_adj_grp["avg"], width=1, prominence=cdr_prom_thr
+                -df_chr_methyl_adj_grp["avg"], width=1, prominence=cdr_prom_thr, wlen=wlen
             )
 
             grp_cdr_intervals: set[Interval] = set()
