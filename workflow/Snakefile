@@ -415,7 +415,7 @@ checkpoint call_cdrs:
         ),
         baseline_avg_methyl=(
             f"--baseline_avg_methyl {BASELINE_AVG_METHYL}"
-            if BASELINE_AVG_METHYL
+            if isinstance(BASELINE_AVG_METHYL, float)
             else ""
         ),
     conda:

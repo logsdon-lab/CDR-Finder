@@ -208,7 +208,7 @@ def main():
         # Threshold scaling factor. Will always be at least 1.
         # Reduces false positives when mean avg methylation is low.
         thr_scaling_factor = max(
-            baseline_avg_methyl / avg_methyl_mean if baseline_avg_methyl else 1, 1
+            baseline_avg_methyl / avg_methyl_mean if baseline_avg_methyl != 0.0 else 1, 1
         )
         avg_methyl_std = df_chr_methyl["avg"].std()
         cdr_prom_thr = (
