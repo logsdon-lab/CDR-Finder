@@ -28,13 +28,23 @@ def main():
         has_header=False,
         new_columns=["chrom", "chrom_st", "chrom_end", "avg_methyl", "cov"],
     ).with_columns(methyl_cov=pl.col("cov") * (pl.col("avg_methyl") / 100))
-    df_cdr = pl.read_csv(
-        args.bed_cdr,
-        separator="\t",
-        has_header=False,
-        columns=[0, 1, 2],
-        new_columns=["chrom", "chrom_st", "chrom_end"],
-    )
+
+    cdr_bed = os.path.join(outdir, "cdr.bed")
+    try:
+        df_cdr = pl.read_csv(
+            args.bed_cdr,
+            separator="\t",
+            has_header=False,
+            columns=[0, 1, 2],
+            new_columns=["chrom", "chrom_st", "chrom_end"],
+        )
+        # cdr_bed
+        df_cdr.filter(pl.col("chrom") == args.ctg).write_csv(
+            cdr_bed, separator="\t", include_header=False
+        )
+    except pl.exceptions.NoDataError:
+        _ = open(cdr_bed, "wt")
+
     hsat_repeats = [
         "SAR",
         "HSAT",
@@ -81,10 +91,6 @@ def main():
         pl.concat([df_rm, df_uniq_sequence])
         .sort(by=["chrom", "chrom_st"])
         .filter(pl.col("chrom_st") != pl.col("chrom_end"))
-    )
-    # cdr_bed
-    df_cdr.filter(pl.col("chrom") == args.ctg).write_csv(
-        os.path.join(outdir, "cdr.bed"), separator="\t", include_header=False
     )
     df_binned_freq.filter(pl.col("chrom") == args.ctg).select(
         "chrom", "chrom_st", "chrom_end", "cov"
