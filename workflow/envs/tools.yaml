@@ -5,7 +5,7 @@ dependencies:
   # Change from 4.1.0 to 4.1.2.p1 due to inability to install when using strict channel priority
   - repeatmasker==4.1.2.p1
   - bedtools
-  - ont-modkit==0.3.2
+  - ont-modkit==0.6.0
   - samtools
   - seqtk
   - seqkit
