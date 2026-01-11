@@ -21,6 +21,8 @@ This is done by:
     * Optionally, extend edges to mean signal and some number of standard deviations to get missed peaks.
     * Optionally, merge adjacent detected CDRs.
 
+> [!NOTE]
+> This fork is optimized for use with [CenMAP](https://github.com/logsdon-lab/CenMAP) and its defaults may not work for normal use.
 
 ## Getting Started
 ```bash

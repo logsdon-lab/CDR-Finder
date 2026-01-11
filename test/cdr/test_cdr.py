@@ -2,6 +2,9 @@ import pytest
 from test.helpers.integration import run_integration_test
 
 
+OVERWRITE_OUTPUT: bool = False
+
+
 @pytest.mark.parametrize(
     ["in_bed", "exp_bed", "thr_height", "thr_prom", "args"],
     [
@@ -24,7 +27,16 @@ from test.helpers.integration import run_integration_test
             "test/cdr/expected/HG00731_cdr_ext.bed",
             0.34,
             0.3,
-            tuple(["--bp_edge", str(500_000), "--extend_edges_std", str(0), "--output_plot_dir", "test/cdr/plots/3"]),
+            tuple(
+                [
+                    "--bp_edge",
+                    str(500_000),
+                    "--extend_edges_std",
+                    str(0),
+                    "--output_plot_dir",
+                    "test/cdr/plots/3",
+                ]
+            ),
         ),
         (
             "test/cdr/input/NA19331_intersect.bed",
@@ -45,7 +57,7 @@ from test.helpers.integration import run_integration_test
                     "--override_chrom_params",
                     "test/config/chr8_params.json",
                     "--output_plot_dir",
-                    "test/cdr/plots/5"
+                    "test/cdr/plots/5",
                 ]
             ),
         ),
@@ -70,4 +82,5 @@ def test_cdr_finder(
         str(thr_prom),
         *args,
         expected_output=exp_bed,
+        overwrite_output=OVERWRITE_OUTPUT,
     )

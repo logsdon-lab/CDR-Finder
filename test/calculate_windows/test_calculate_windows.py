@@ -2,6 +2,9 @@ import pytest
 from test.helpers.integration import run_integration_test
 
 
+OVERWRITE_OUTPUT: bool = False
+
+
 @pytest.mark.parametrize(
     [
         "target_bed",
@@ -34,4 +37,5 @@ def test_calculate_windows(
         "--window_size",
         str(window_size),
         expected_output=exp_bed,
+        overwrite_output=OVERWRITE_OUTPUT,
     )

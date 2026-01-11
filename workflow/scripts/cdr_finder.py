@@ -41,7 +41,6 @@ def get_interval(
     return df_res
 
 
-
 def group_by_dst(df: pl.DataFrame, dst: int, group_name: str) -> pl.DataFrame:
     try:
         df = df.drop("index")
@@ -81,6 +80,7 @@ def group_by_dst(df: pl.DataFrame, dst: int, group_name: str) -> pl.DataFrame:
             .then(pl.col(group_name).shift(-1))
             .otherwise(pl.col(group_name))
         )
+        .sort("chrom", "st")
     )
 
 
@@ -107,13 +107,13 @@ def main():
     ap.add_argument(
         "--thr_height_perc_valley",
         type=float,
-        default=0.5,
+        default=0.34,
         help="Threshold percent of the median methylation percentage needed as the minimal height/prominence of a valley from the median. Larger values filter for deeper valleys.",
     )
     ap.add_argument(
         "--thr_prom_perc_valley",
         type=float,
-        default=None,
+        default=0.2,
         help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for prominent valleys.",
     )
     ap.add_argument(
@@ -125,20 +125,28 @@ def main():
     ap.add_argument(
         "--extend_edges_std",
         type=int,
-        default=None,
+        default=-1,
         help="Extend edges of CDR until the mean signal with the given stdev is reached. Adds smaller, less prominent CDRs if missed. A value of 0 is the mean while +1/-1 is one stdev above/below the mean.",
     )
     ap.add_argument(
         "--edge_height_heuristic",
         type=str,
         choices=["min", "max", "avg"],
-        default="min",
+        # This will cause dips in methylation along the pericentromere to be flagged.
+        # We don't care because we filter them with live HOR annotation.
+        default="avg",
         help="Heuristic used to determine edge height of CDR.",
+    )
+    ap.add_argument(
+        "--rolling_mean_window",
+        type=int,
+        default=3,
+        help="Apply rolling mean window to smooth. Helps in cases where dip bottom has small spikes causing peaks to have low prominence.",
     )
     ap.add_argument(
         "--baseline_avg_methyl",
         type=float,
-        default=0.4,
+        default=0.3,
         help=" ".join(
             [
                 "Average methylation baseline used to scale thresholds in cases of low average methylation.",
@@ -178,6 +186,13 @@ def main():
     if output_plot_dir:
         os.makedirs(output_plot_dir, exist_ok=True)
 
+    if output_plot_dir:
+        skipped_cdr_intervals: defaultdict[str, IntervalTree] = defaultdict(
+            IntervalTree
+        )
+    else:
+        skipped_cdr_intervals = None
+
     cdr_intervals: defaultdict[str, IntervalTree] = defaultdict(IntervalTree)
     for chrom, df_chr_methyl in df.group_by(["chrom"]):
         chrom: str = chrom[0]
@@ -202,15 +217,17 @@ def main():
         )
 
         # Group adjacent, contiguous intervals.
-        df_chr_methyl_adj_groups = group_by_dst(df_chr_methyl, 1, "brk").partition_by("brk")
+        df_chr_methyl_adj_groups = group_by_dst(df_chr_methyl, 1, "brk").partition_by(
+            "brk", maintain_order=True
+        )
         avg_methyl_median = df_chr_methyl["avg"].median()
         avg_methyl_mean = df_chr_methyl["avg"].mean()
         # Threshold scaling factor. Will always be at least 1.
         # Reduces false positives when mean avg methylation is low.
         thr_scaling_factor = max(
-            baseline_avg_methyl / avg_methyl_mean if baseline_avg_methyl != 0.0 else 1, 1
+            baseline_avg_methyl / avg_methyl_mean if baseline_avg_methyl != 0.0 else 1,
+            1,
         )
-        avg_methyl_std = df_chr_methyl["avg"].std()
         cdr_prom_thr = (
             (avg_methyl_median * thr_prom_perc_valley) * thr_scaling_factor
             if thr_prom_perc_valley
@@ -226,15 +243,31 @@ def main():
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
-            df_chr_methyl_adj_grp = df_chr_methyl_adj_grp.drop("index").with_row_index()
+            df_chr_methyl_adj_grp = (
+                df_chr_methyl_adj_grp.drop("index")
+                .with_row_index()
+                .with_columns(
+                    # Handles case by smoothing where mostly flat dip with small spikes in avg methylation.
+                    # scipy find_peaks struggles with these due to low prominence.
+                    pl.col("avg").rolling_mean(args.rolling_mean_window)
+                )
+            )
+            chr_methyl_adj_grp_median = df_chr_methyl_adj_grp["avg"].median()
+            chr_methyl_adj_grp_mean = df_chr_methyl_adj_grp["avg"].mean()
+            chr_methyl_adj_grp_std = df_chr_methyl_adj_grp["avg"].std()
 
             # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
             # wlen applies to both edges (+/- n/2 indices) to find prominence. Lower prevents overestimate of peak prom.
-            window = (df_chr_methyl_adj_grp["end"] - df_chr_methyl_adj_grp["st"]).mode()[0]
+            window = (
+                df_chr_methyl_adj_grp["end"] - df_chr_methyl_adj_grp["st"]
+            ).mode()[0]
             wlen = (bp_edge // window) * 2
             _, peak_info = signal.find_peaks(
-                -df_chr_methyl_adj_grp["avg"], width=1, prominence=cdr_prom_thr, wlen=wlen
+                -df_chr_methyl_adj_grp["avg"],
+                width=1,
+                prominence=cdr_prom_thr,
+                wlen=wlen,
             )
 
             grp_cdr_intervals: set[Interval] = set()
@@ -251,7 +284,7 @@ def main():
 
                 grp_cdr_intervals.add(Interval(cdr_st, cdr_end, cdr_prom))
 
-            for interval in grp_cdr_intervals:
+            for interval in sorted(grp_cdr_intervals):
                 cdr_st, cdr_end, cdr_prom = interval.begin, interval.end, interval.data
                 ignore_intervals = grp_cdr_intervals.difference([interval])
                 df_cdr = get_interval(df_chr_methyl_adj_grp, interval)
@@ -267,14 +300,14 @@ def main():
                     df_chr_methyl_adj_grp, interval_cdr_left, ignore_intervals
                 ).with_columns(
                     avg=pl.when(pl.col("ignore"))
-                    .then(avg_methyl_median)
+                    .then(chr_methyl_adj_grp_median)
                     .otherwise(pl.col("avg"))
                 )
                 df_cdr_right = get_interval(
                     df_chr_methyl_adj_grp, interval_cdr_right, ignore_intervals
                 ).with_columns(
                     avg=pl.when(pl.col("ignore"))
-                    .then(avg_methyl_median)
+                    .then(chr_methyl_adj_grp_median)
                     .otherwise(pl.col("avg"))
                 )
 
@@ -284,12 +317,8 @@ def main():
 
                 # If empty, use median.
                 edge_heights = [
-                    cdr_right_median
-                    if cdr_right_median
-                    else df_chr_methyl_adj_grp["avg"].median(),
-                    cdr_left_median
-                    if cdr_left_median
-                    else df_chr_methyl_adj_grp["avg"].median(),
+                    cdr_right_median if cdr_right_median else chr_methyl_adj_grp_median,
+                    cdr_left_median if cdr_left_median else chr_methyl_adj_grp_median,
                 ]
                 if edge_height_heuristic == "min":
                     cdr_edge_height = min(edge_heights)
@@ -306,6 +335,14 @@ def main():
 
                 # Ignore CDR if less than height.
                 if cdr_height < cdr_height_thr:
+                    print(
+                        f"Omit CDR at {chrom}:{interval.begin}-{interval.end} with height of {cdr_height} and prominence {cdr_prom}.",
+                        file=sys.stderr,
+                    )
+                    if output_plot_dir:
+                        skipped_cdr_intervals[chrom].add(
+                            Interval(interval.begin, interval.end, cdr_height)
+                        )
                     continue
 
                 print(
@@ -314,7 +351,9 @@ def main():
                 )
 
                 if isinstance(extend_edges_std, int):
-                    edge_thr = avg_methyl_mean + (extend_edges_std * avg_methyl_std)
+                    edge_thr = chr_methyl_adj_grp_mean + (
+                        extend_edges_std * chr_methyl_adj_grp_std
+                    )
                     try:
                         cdr_st = df_cdr_left.filter(
                             (pl.col("st") < cdr_st) & (pl.col("avg") >= edge_thr)
@@ -340,6 +379,7 @@ def main():
 
         if output_plot_dir:
             itvs_cdr = cdr_intervals[chrom]
+            skipped_itvs = skipped_cdr_intervals[chrom]
             fig, ax = plt.subplots(figsize=(16, 4), layout="constrained")
             ax: matplotlib.axes.Axes
             ax.fill_between(
@@ -376,22 +416,27 @@ def main():
             ax.set_xlabel("Position (bp)")
             ax.set_ylabel("Average CpG methylation (%)")
             ax.set_ylim(0.0, 100.0)
-            for cdr in itvs_cdr.iter():
-                midpt = cdr.begin + ((cdr.end - cdr.begin) / 2)
-                # https://osxastrotricks.wordpress.com/2014/12/02/add-border-around-text-with-matplotlib/
-                txt = ax.text(
-                    midpt,
-                    avg_methyl_median + 5,
-                    round(cdr.data),
-                    color="black",
-                    fontsize="small",
-                    ha="center",
-                    va="center",
-                )
-                txt.set_path_effects(
-                    [PathEffects.withStroke(linewidth=2, foreground="w")]
-                )
-                ax.axvspan(cdr.begin, cdr.end, color="red", alpha=0.5, label="CDR")
+            for itvs, color, label in (
+                (itvs_cdr, "red", "CDR"),
+                (skipped_itvs, "yellow", "Omitted"),
+            ):
+                for itv in itvs.iter():
+                    value = round(itv.data) if itv.data else 0
+                    midpt = itv.begin + ((itv.end - itv.begin) / 2)
+                    # https://osxastrotricks.wordpress.com/2014/12/02/add-border-around-text-with-matplotlib/
+                    txt = ax.text(
+                        midpt,
+                        avg_methyl_median + 5,
+                        value,
+                        color="black",
+                        fontsize="small",
+                        ha="center",
+                        va="center",
+                    )
+                    txt.set_path_effects(
+                        [PathEffects.withStroke(linewidth=2, foreground="w")]
+                    )
+                    ax.axvspan(itv.begin, itv.end, color=color, alpha=0.5, label=label)
 
             handles, labels = ax.get_legend_handles_labels()
             labels_handles = dict(zip(labels, handles))
