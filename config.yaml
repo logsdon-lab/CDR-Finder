@@ -26,9 +26,9 @@ bp_merge: 1
 
 # Threshold percent of the average methylation percentage needed as the minimal height of a valley from the median.
 # ex. 0.1 allows valleys with a height from the median equal to 10% of the median.
-height_perc_valley_threshold: 0.34
+height_perc_valley_threshold: 0.2
 
-prom_perc_valley_threshold: 0.3
+prom_perc_valley_threshold: 0.1
 
 # Baseline average methylation per centromere.
 # Adjusts height_perc_valley_threshold and prom_perc_valley_threshold based on avg methyl coverage relative to baseline.

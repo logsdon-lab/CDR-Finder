@@ -11,22 +11,22 @@ OVERWRITE_OUTPUT: bool = False
         (
             "test/cdr/input/CHM13_intersect.bed",
             "test/cdr/expected/CHM13_cdr.bed",
-            0.5,
-            0.5,
+            0.2,
+            0.1,
             tuple(["--bp_edge", str(500_000), "--output_plot_dir", "test/cdr/plots/1"]),
         ),
         (
             "test/cdr/input/HG00731_intersect.bed",
             "test/cdr/expected/HG00731_cdr.bed",
-            0.34,
-            0.3,
+            0.2,
+            0.1,
             tuple(["--bp_edge", str(500_000), "--output_plot_dir", "test/cdr/plots/2"]),
         ),
         (
             "test/cdr/input/HG00731_intersect.bed",
             "test/cdr/expected/HG00731_cdr_ext.bed",
-            0.34,
-            0.3,
+            0.2,
+            0.1,
             tuple(
                 [
                     "--bp_edge",
@@ -41,15 +41,15 @@ OVERWRITE_OUTPUT: bool = False
         (
             "test/cdr/input/NA19331_intersect.bed",
             "test/cdr/expected/NA19331_cdr.bed",
-            0.34,
-            0.3,
+            0.2,
+            0.1,
             tuple(["--bp_edge", str(500_000), "--output_plot_dir", "test/cdr/plots/4"]),
         ),
         (
             "test/cdr/input/CHM13_intersect.bed",
             "test/cdr/expected/CHM13_cdr_chr8_params.bed",
-            0.5,
-            0.5,
+            0.2,
+            0.1,
             tuple(
                 [
                     "--bp_edge",

@@ -41,6 +41,35 @@ def get_interval(
     return df_res
 
 
+def extend_cdr(
+    cdr_st: int,
+    cdr_end: int,
+    chr_methyl_adj_grp_mean: float,
+    chr_methyl_adj_grp_median: float,
+    chr_methyl_adj_grp_std: float,
+    extend_edges_std: int,
+    df_cdr_left: pl.DataFrame,
+    df_cdr_right: pl.DataFrame,
+) -> tuple[int, int]:
+    edge_thr = min(
+        chr_methyl_adj_grp_mean + (extend_edges_std * chr_methyl_adj_grp_std),
+        chr_methyl_adj_grp_median,
+    )
+    try:
+        cdr_st = df_cdr_left.filter(
+            (pl.col("st") < cdr_st) & (pl.col("avg") >= edge_thr)
+        ).row(-1, named=True)["st"]
+    except pl.exceptions.OutOfBoundsError:
+        cdr_st = cdr_st
+    try:
+        cdr_end = df_cdr_right.filter(
+            (pl.col("end") > cdr_end) & (pl.col("avg") >= edge_thr)
+        ).row(0, named=True)["end"]
+    except pl.exceptions.OutOfBoundsError:
+        cdr_end = cdr_end
+    return cdr_st, cdr_end
+
+
 def group_by_dst(df: pl.DataFrame, dst: int, group_name: str) -> pl.DataFrame:
     try:
         df = df.drop("index")
@@ -107,13 +136,13 @@ def main():
     ap.add_argument(
         "--thr_height_perc_valley",
         type=float,
-        default=0.34,
+        default=0.2,
         help="Threshold percent of the median methylation percentage needed as the minimal height/prominence of a valley from the median. Larger values filter for deeper valleys.",
     )
     ap.add_argument(
         "--thr_prom_perc_valley",
         type=float,
-        default=0.2,
+        default=0.1,
         help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for prominent valleys.",
     )
     ap.add_argument(
@@ -140,13 +169,13 @@ def main():
     ap.add_argument(
         "--rolling_mean_window",
         type=int,
-        default=3,
+        default=5,
         help="Apply rolling mean window to smooth. Helps in cases where dip bottom has small spikes causing peaks to have low prominence.",
     )
     ap.add_argument(
         "--baseline_avg_methyl",
         type=float,
-        default=0.3,
+        default=0.4,
         help=" ".join(
             [
                 "Average methylation baseline used to scale thresholds in cases of low average methylation.",
@@ -243,18 +272,21 @@ def main():
 
         # Find peaks within the signal per group.
         for df_chr_methyl_adj_grp in df_chr_methyl_adj_groups:
+            chr_methyl_adj_grp_median = df_chr_methyl_adj_grp["avg"].median()
+            chr_methyl_adj_grp_mean = df_chr_methyl_adj_grp["avg"].mean()
+            chr_methyl_adj_grp_std = df_chr_methyl_adj_grp["avg"].std()
             df_chr_methyl_adj_grp = (
                 df_chr_methyl_adj_grp.drop("index")
                 .with_row_index()
                 .with_columns(
                     # Handles case by smoothing where mostly flat dip with small spikes in avg methylation.
                     # scipy find_peaks struggles with these due to low prominence.
-                    pl.col("avg").rolling_mean(args.rolling_mean_window)
+                    # Then use low pass filter and clip to median per group with the assumption that methylation landscape of centromere is hypermethylated plateau.
+                    pl.col("avg")
+                    .rolling_mean(args.rolling_mean_window, center=True)
+                    .clip(0, chr_methyl_adj_grp_median)
                 )
             )
-            chr_methyl_adj_grp_median = df_chr_methyl_adj_grp["avg"].median()
-            chr_methyl_adj_grp_mean = df_chr_methyl_adj_grp["avg"].mean()
-            chr_methyl_adj_grp_std = df_chr_methyl_adj_grp["avg"].std()
 
             # Require valley has prominence of some percentage of median methyl signal.
             # Invert for peaks.
@@ -351,21 +383,16 @@ def main():
                 )
 
                 if isinstance(extend_edges_std, int):
-                    edge_thr = chr_methyl_adj_grp_mean + (
-                        extend_edges_std * chr_methyl_adj_grp_std
+                    extend_cdr(
+                        cdr_st=cdr_st,
+                        cdr_end=cdr_end,
+                        chr_methyl_adj_grp_median=chr_methyl_adj_grp_median,
+                        chr_methyl_adj_grp_mean=chr_methyl_adj_grp_mean,
+                        chr_methyl_adj_grp_std=chr_methyl_adj_grp_std,
+                        extend_edges_std=extend_edges_std,
+                        df_cdr_left=df_cdr_left,
+                        df_cdr_right=df_cdr_right,
                     )
-                    try:
-                        cdr_st = df_cdr_left.filter(
-                            (pl.col("st") < cdr_st) & (pl.col("avg") >= edge_thr)
-                        ).row(-1, named=True)["st"]
-                    except pl.exceptions.OutOfBoundsError:
-                        cdr_st = cdr_st
-                    try:
-                        cdr_end = df_cdr_right.filter(
-                            (pl.col("end") > cdr_end) & (pl.col("avg") >= edge_thr)
-                        ).row(0, named=True)["end"]
-                    except pl.exceptions.OutOfBoundsError:
-                        cdr_end = cdr_end
 
                 cdr_intervals[chrom].chop(cdr_st, cdr_end)
 
