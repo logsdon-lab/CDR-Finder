@@ -324,11 +324,14 @@ rule intersect_RM:
 def bed_files(wc):
     fofn = checkpoints.subset_fasta.get(**wc).output.fasta_fofn
     fnames = []
-    with open(fofn) as fh:
-        for file in fh:
-            file = file.strip()
-            fname, ext = os.path.splitext(os.path.basename(file))
-            fnames.append(fname)
+    try:
+        with open(fofn) as fh:
+            for file in fh:
+                file = file.strip()
+                fname, ext = os.path.splitext(os.path.basename(file))
+                fnames.append(fname)
+    except FileNotFoundError:
+        return []
 
     rm_out = (
         expand(rules.format_RM.output, sample=wc.sample, fname=fnames)
@@ -503,10 +506,13 @@ def all_cdr_plots(wc):
     # Plot all contigs
     intersect_bed = expand(rules.call_cdrs.input.methyl_bed, sample=wc.sample)[0]
     ctgs = set()
-    with open(intersect_bed, "rt") as fh:
-        for line in fh:
-            ctg, *_ = line.strip().split("\t")
-            ctgs.add(ctg)
+    try:
+        with open(intersect_bed, "rt") as fh:
+            for line in fh:
+                ctg, *_ = line.strip().split("\t")
+                ctgs.add(ctg)
+    except FileNotFoundError:
+        return []
 
     return expand(rules.plot_cdr.output, sample=wc.sample, ctg=ctgs)
 
