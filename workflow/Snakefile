@@ -14,6 +14,7 @@ BP_ALR_MERGE = config.get("bp_alr_merge", 8000)
 HEIGHT_THRESHOLD = config.get("height_perc_valley_threshold", 0.2)
 PROM_THRESHOLD = config.get("prom_perc_valley_threshold", 0.1)
 EDGE_HEIGHT_HEURISTIC = config.get("edge_height_heuristic", "avg")
+ROLLING_MEAN_WINDOW = config.get("rolling_mean_window")
 BASELINE_AVG_METHYL = config.get("baseline_avg_methyl", 0.4)
 RESTRICT_ALR = config.get("restrict_alr", True)
 OVERLAP_OPACITY = config.get("overlap_opacity", 0.34)
@@ -101,7 +102,6 @@ rule get_methylation_bed:
         "envs/tools.yaml"
     shell:
         """
-        samtools index {input.bam} 2> {log}
         modkit pileup {input.bam} {output.methyl_bed} \
         --include-bed <(cut -f 1-3 {input.region}) \
         --threads {threads} \
@@ -404,6 +404,11 @@ checkpoint call_cdrs:
             if isinstance(EXTEND_EDGES_STD, int)
             else ""
         ),
+        rolling_mean_window=(
+            f"--rolling_mean_window {ROLLING_MEAN_WINDOW}"
+            if ROLLING_MEAN_WINDOW
+            else ""
+        ),
         thr_height_perc_valley=HEIGHT_THRESHOLD,
         override_chrom_params=lambda wc, input: (
             f"--override_chrom_params {input.override_chrom_params}"
@@ -429,6 +434,7 @@ checkpoint call_cdrs:
         {params.thr_prom_perc_valley} \
         {params.extend_edges_std} \
         {params.override_chrom_params} \
+        {params.rolling_mean_window} \
         {params.baseline_avg_methyl} > {output} 2> {log}
         """
 

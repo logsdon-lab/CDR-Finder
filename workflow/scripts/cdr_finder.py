@@ -1,6 +1,5 @@
 import os
 import sys
-import math
 import json
 import argparse
 import statistics
@@ -130,9 +129,7 @@ def main():
         type=argparse.FileType("wt"),
         help="CDR regions as 3-column bedfile.",
     )
-    ap.add_argument(
-        "--bp_merge", type=int, default=None, help="Base pairs to merge CDRs."
-    )
+    ap.add_argument("--bp_merge", type=int, default=1, help="Base pairs to merge CDRs.")
     ap.add_argument(
         "--thr_height_perc_valley",
         type=float,
@@ -142,13 +139,13 @@ def main():
     ap.add_argument(
         "--thr_prom_perc_valley",
         type=float,
-        default=0.1,
+        default=0.01,
         help="Threshold percent of the median methylation percentage needed as the minimal prominence of a valley from the median. Larger values filter for prominent valleys.",
     )
     ap.add_argument(
         "--bp_edge",
         type=int,
-        default=5_000,
+        default=500_000,
         help="Bases to look on both edges of cdr to determine relative height.",
     )
     ap.add_argument(
@@ -169,7 +166,7 @@ def main():
     ap.add_argument(
         "--rolling_mean_window",
         type=int,
-        default=5,
+        default=3,
         help="Apply rolling mean window to smooth. Helps in cases where dip bottom has small spikes causing peaks to have low prominence.",
     )
     ap.add_argument(
@@ -308,10 +305,10 @@ def main():
             ):
                 # Convert approx indices to indices
                 cdr_st = df_chr_methyl_adj_grp.filter(
-                    pl.col("index") == math.floor(cdr_st_idx)
+                    pl.col("index") == round(cdr_st_idx)
                 ).row(0, named=True)["st"]
                 cdr_end = df_chr_methyl_adj_grp.filter(
-                    pl.col("index") == math.ceil(cdr_end_idx)
+                    pl.col("index") == round(cdr_end_idx)
                 ).row(0, named=True)["end"]
 
                 grp_cdr_intervals.add(Interval(cdr_st, cdr_end, cdr_prom))
@@ -404,26 +401,36 @@ def main():
                 itv_cdr = Interval(cdr_st, cdr_end, cdr_height)
                 cdr_intervals[chrom].add(itv_cdr)
 
+    # Merge overlaps and output.
+    for chrom, cdrs in cdr_intervals.items():
+        df_chr_methyl = df.filter(pl.col("chrom") == chrom)
+        avg_methyl_median = df_chr_methyl["avg"].median()
+        if bp_merge:
+            starting_intervals = len(cdrs)
+            cdrs.merge_overlaps(data_reducer=lambda x, y: max(x, y))
+            print(
+                f"Merged {starting_intervals - len(cdrs)} intervals in {chrom}.",
+                file=sys.stderr,
+            )
+
         if output_plot_dir:
-            itvs_cdr = cdr_intervals[chrom]
+            itvs_cdr = cdrs
             skipped_itvs = skipped_cdr_intervals[chrom]
             fig, ax = plt.subplots(figsize=(16, 4), layout="constrained")
             ax: matplotlib.axes.Axes
-            ax.fill_between(
+            ax.bar(
                 x=df_chr_methyl["st"],
-                y1=df_chr_methyl["avg"],
+                width=df_chr_methyl["end"] - df_chr_methyl["st"],
+                height=df_chr_methyl["avg"],
                 color="black",
             )
-            ax.set_xlim(
-                left=df_chr_methyl["st"].min(),
-                right=df_chr_methyl["st"].max(),
-            )
+            xmin, xmax = df_chr_methyl["st"].min(), df_chr_methyl["end"].max()
+            ax.set_xlim(left=xmin, right=xmax)
             lines = [
                 (avg_methyl_median, "Median", "black"),
                 (cdr_prom_thr, "Prominence threshold", "red"),
                 (cdr_height_thr, "Height threshold", "blue"),
             ]
-            _, xmax = ax.get_xlim()
             for value, label, color in lines:
                 value = round(value)
                 ax.axhline(round(value), label=label, linestyle="dotted", color=color)
@@ -448,8 +455,14 @@ def main():
                 (skipped_itvs, "yellow", "Omitted"),
             ):
                 for itv in itvs.iter():
+                    if bp_merge:
+                        st = itv.begin + bp_merge
+                        end = itv.end - bp_merge
+                    else:
+                        st = itv.begin
+                        end = itv.end
                     value = round(itv.data) if itv.data else 0
-                    midpt = itv.begin + ((itv.end - itv.begin) / 2)
+                    midpt = st + ((end - st) / 2)
                     # https://osxastrotricks.wordpress.com/2014/12/02/add-border-around-text-with-matplotlib/
                     txt = ax.text(
                         midpt,
@@ -463,7 +476,7 @@ def main():
                     txt.set_path_effects(
                         [PathEffects.withStroke(linewidth=2, foreground="w")]
                     )
-                    ax.axvspan(itv.begin, itv.end, color=color, alpha=0.5, label=label)
+                    ax.axvspan(st, end, color=color, alpha=0.5, label=label)
 
             handles, labels = ax.get_legend_handles_labels()
             labels_handles = dict(zip(labels, handles))
@@ -482,17 +495,7 @@ def main():
 
             output_plot = os.path.join(output_plot_dir, f"{chrom}.png")
             fig.savefig(output_plot, bbox_inches="tight", dpi=600)
-            plt.close()
-
-    # Merge overlaps and output.
-    for chrom, cdrs in cdr_intervals.items():
-        if bp_merge:
-            starting_intervals = len(cdrs)
-            cdrs.merge_overlaps(data_reducer=lambda x, y: max(x, y))
-            print(
-                f"Merged {starting_intervals - len(cdrs)} intervals in {chrom}.",
-                file=sys.stderr,
-            )
+            plt.close(fig)
 
         for cdr in sorted(cdrs.iter()):
             cdr_st, cdr_end, cdr_height = cdr.begin, cdr.end, cdr.data

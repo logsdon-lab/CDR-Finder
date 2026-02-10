@@ -118,6 +118,7 @@ Multiple samples can be provided via the configfile. Each sample should contain 
 |`height_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal height of a valley from the median. Larger values filter for deeper valleys.|0.34|
 |`prom_perc_valley_threshold`|Threshold percent of the median methylation percentage needed as the minimal [prominence](https://en.wikipedia.org/wiki/Topographic_prominence) of a valley from the median. Larger values filter for more prominent valleys. Helps in removing low-confidence CDRs.|0.3|
 |`edge_height_heuristic`|Heuristic used when determining edge height of CDR. Either min, max, or avg.|min|
+|`rolling_mean_window`|Apply a rolling mean window to CpG signal windows before CDR calling.|None|
 |`extend_edges_std`|Extend edges of CDR until the mean average methylation signal and some number of standard deviations is reached. May fix smaller, less prominent CDRs being missed. A value of 0 is the mean while +1/-1 is one stdev above/below the mean.|-1|
 |`baseline_avg_methyl`|Baseline average methylation per region. Adjusts `height_perc_valley_threshold` and `prom_perc_valley_threshold` based on the average methyl percent relative to baseline. Will only increase thresholds and never reduce them. Reduces false positives in centromeres with low methylation relative to coverage.|0.4|
 
